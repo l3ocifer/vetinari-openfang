@@ -155,7 +155,7 @@ SKILL.md files. Skills relevant to a chief-of-staff role:
 | `mcp-devops-tools` | Read-only kubectl + Prom + Loki for cross-agent observability |
 | `obsidian` | Cross-graph reads via Logseq markdown |
 | `session-logs` | Cross-session search of my own past coordination decisions |
-| `1password` | `op read` for ad-hoc credential lookups (rare; mostly via env) |
+| `1password` (Vaultwarden adapter) | `bw get item` for ad-hoc credential lookups against `https://warden.leopaska.xyz` (rare; persistent creds arrive via SealedSecret → envFrom). Skill name is historical — implementation talks to Vaultwarden, not 1Password. |
 | `commit-helper` | If Leo dictates a coordination-ADR commit message |
 | `adr-generator` | When a coordination decision warrants an ADR |
 | `weather`, `discord`, `imsg`, `himalaya`, `spotify-player` | NOT FOR ME — these are Sancho's lane |

@@ -117,7 +117,7 @@ in `l3ocifer/homelab/argocd/sealed-secrets/vetinari-secrets.yaml.template`):
 | `NTFY_TOKEN` | bearer for ntfy.leopaska.xyz |
 | `BLUEBUBBLES_API_KEY` | shared key with bluebubbles-proxy |
 | `OFP_SHARED_SECRET` | HMAC-SHA256 mutual auth for A2A |
-| `OP_SERVICE_ACCOUNT_TOKEN` | 1Password service-account |
+| `BW_CLIENTID` + `BW_CLIENTSECRET` | Vaultwarden API-key login for the `bw` CLI (`https://warden.leopaska.xyz`) |
 
 ## License
 
