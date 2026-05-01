@@ -1,0 +1,50 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Vetinari — OpenFang chief-of-staff agent. Floats across the
+# homelab cluster (no nodeSelector). Lives in `agents-shared`
+# alongside Frack, Sancho, the graph PVCs, and the syncthing-graphs
+# pod. See homelab/README.md and ../config/SOUL.md for context.
+
+namespace: agents-shared
+
+resources:
+  - pvc.yaml
+  - rbac.yaml
+  - service.yaml
+  - ingressroute.yaml
+  - deployment.yaml
+
+# ConfigMap generators — kustomize hashes content so any persona /
+# config edit causes a Deployment rollout (Pod template hash changes).
+# Persona files come from THIS repo's homelab/config/ (canonical for
+# Vetinari-specific docs) plus the shared docs from the submoduled
+# homelab repo at homelab/shared/openclaw-configs/shared/.
+configMapGenerator:
+  - name: vetinari-persona
+    files:
+      - SOUL.md=../config/SOUL.md
+      - TOOLS.md=../config/TOOLS.md
+      - AGENTS.md=../shared/openclaw-configs/shared/AGENTS.md
+      - HANDOFF.md=../shared/openclaw-configs/shared/HANDOFF.md
+      - KILLSWITCH.md=../shared/openclaw-configs/shared/KILLSWITCH.md
+      - USER.md=../shared/openclaw-configs/shared/USER.md
+
+  # OpenFang daemon config — single file mounted at
+  # /data/openfang/config.toml in the pod
+  - name: vetinari-openfang-config
+    files:
+      - config.toml=../config/openfang.toml
+
+  # Agent definition for `vetinari` agent — single file mounted at
+  # /data/openfang/agents/vetinari/agent.toml
+  - name: vetinari-agent-config
+    files:
+      - agent.toml=../config/agent.toml
+
+generatorOptions:
+  disableNameSuffixHash: false  # Hash suffix → Deployment rolls on edit
+
+commonLabels:
+  app.kubernetes.io/part-of: agents
+  app.kubernetes.io/managed-by: argocd

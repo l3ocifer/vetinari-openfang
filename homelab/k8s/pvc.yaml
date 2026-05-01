@@ -1,0 +1,29 @@
+---
+# OpenFang state PVC — config + agents/ + memory.db (SQLite session DB)
+# + audit-chain.bin + sessions/. Single-replica is sufficient; canonical
+# memory lives in Postgres `openfang_vetinari` (sealed DATABASE_URL).
+# Block-attached, so Longhorn migrates the volume across nodes when
+# Vetinari reschedules.
+#
+# Lives in `agents-shared` namespace (same as the graph PVCs and the
+# bluebubbles-proxy / syncthing-graphs pods). Vetinari shares this
+# namespace because Longhorn-RWX PVCs cannot be mounted across
+# namespaces — putting Vetinari + the five graph PVCs in `agents-
+# shared` keeps the floating story clean. Siblings remain in their
+# per-agent namespaces with hostPath graph mounts (kept in sync via
+# host-side Syncthing → cluster-side Syncthing) until a Phase 2
+# refactor consolidates them.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: vetinari-state
+  namespace: agents-shared
+  labels:
+    app.kubernetes.io/name: vetinari
+    app.kubernetes.io/component: agent-state
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: longhorn-single
+  resources:
+    requests:
+      storage: 5Gi

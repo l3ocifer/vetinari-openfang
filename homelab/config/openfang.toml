@@ -1,0 +1,309 @@
+# OpenFang config for Vetinari — chief-of-staff agent for the Frick /
+# Frack / Sancho cluster. Mounted at /data/openfang/config.toml in the
+# pod via ConfigMap.
+#
+# See: https://github.com/RightNow-AI/openfang/blob/main/openfang.toml.example
+#
+# Updates:
+#   1. Edit this file in openclaw-configs/vetinari/openfang.toml.
+#   2. Commit + push.
+#   3. ArgoCD applies the new ConfigMap; OpenFang hot-reloads or pod
+#      restart applies the change.
+
+# ─── API server ──────────────────────────────────────────────────────
+api_listen = "0.0.0.0:4200"
+# api_key is read from OPENFANG_API_KEY env (sealed in vetinari-secrets)
+# OpenFang resolves api_key_env at start; not specified here directly.
+
+# ─── Default model ───────────────────────────────────────────────────
+# Routes through LiteLLM at the cluster gateway. The OpenAI-compatible
+# provider matches LiteLLM's interface.
+[default_model]
+provider = "openai_compatible"
+model = "chat"  # LiteLLM alias — currently qwen2.5-coder:32b via vllm-chat
+base_url = "http://litellm.ai.svc.cluster.local:4000/v1"
+api_key_env = "LITELLM_API_KEY"
+
+# ─── Memory ──────────────────────────────────────────────────────────
+[memory]
+# OpenFang's local SQLite session DB lives in /data/openfang/openfang.db
+# (under OPENFANG_HOME). Volatile across replica rebuilds; canonical
+# memory below in [memory.postgres].
+sqlite_path = "/data/openfang/openfang.db"
+# Confidence decay rate for old memories — same default as upstream.
+decay_rate = 0.05
+
+  # ─── Postgres canonical store ──────────────────────────────────────
+  # Cross-session vector memory + audit-chain mirror. URL sealed in
+  # vetinari-secrets.DATABASE_URL.
+  [memory.postgres]
+  url_env = "DATABASE_URL"
+  vector_extension = "pgvector"
+  schema = "vetinari_memory"
+
+  # ─── Logseq graph search paths ─────────────────────────────────────
+  # OpenFang's memory_recall tool indexes these directories with the
+  # same embedding backend used for sessions, scoped by access tier.
+  [memory.logseq]
+  enabled = true
+  graphs = [
+    { name = "vetinari", path = "/data/graphs/vetinari", access = "rw" },
+    { name = "leo",      path = "/data/graphs/leo",      access = "r+w-restricted",
+      writable_paths = ["pages/world/open-loops.md",
+                        "pages/world/state-of-the-union.md",
+                        "pages/world/strategic-outlook.md",
+                        "pages/agent-contributions/vetinari/"] },
+    { name = "frick",  path = "/data/graphs/frick",  access = "r" },
+    { name = "frack",  path = "/data/graphs/frack",  access = "r" },
+    { name = "sancho", path = "/data/graphs/sancho", access = "r" },
+  ]
+  block_attribution = { agent = "vetinari", auto = true }
+
+  [memory.embeddings]
+  provider = "openai_compatible"
+  base_url = "http://litellm.ai.svc.cluster.local:4000/v1"
+  api_key_env = "LITELLM_API_KEY"
+  model = "embed"
+  dim = 1024
+
+  [memory.search]
+  hybrid = true
+  vector_weight = 0.7
+  text_weight = 0.3
+
+# ─── Network (OFP P2P) ───────────────────────────────────────────────
+[network]
+listen_addr = "0.0.0.0:50051"
+shared_secret_env = "OFP_SHARED_SECRET"
+
+# ─── Agent-to-Agent (A2A) ────────────────────────────────────────────
+# Vetinari's chief-of-staff role hinges on dispatching tasks to the
+# three siblings. OpenFang's A2A protocol is HMAC-SHA256 mutual auth
+# over HTTP. Each peer needs to expose /.well-known/agent.json (its
+# "agent card") for OpenFang's discovery.
+
+[a2a]
+enabled = true
+listen = true  # Accept inbound A2A from siblings (e.g. handoff results)
+
+  [[a2a.peers]]
+  name = "frick"
+  agent_card_url = "http://frick.ironclaw.svc.cluster.local:8080/.well-known/agent.json"
+  description = "IronClaw runtime, alef. Cluster + home automation."
+  auth = { type = "hmac_sha256", shared_secret_env = "OFP_SHARED_SECRET" }
+
+  [[a2a.peers]]
+  name = "frack"
+  agent_card_url = "http://frack.frack.svc.cluster.local:18789/.well-known/agent.json"
+  description = "OpenClaw runtime, thebeast. The 12 businesses + customer ops."
+  auth = { type = "hmac_sha256", shared_secret_env = "OFP_SHARED_SECRET" }
+
+  [[a2a.peers]]
+  name = "sancho"
+  agent_card_url = "http://sancho.sancho.svc.cluster.local:3001/.well-known/agent.json"
+  description = "Hermes runtime, alef. Calendar / email / iMessage / personal life."
+  auth = { type = "hmac_sha256", shared_secret_env = "OFP_SHARED_SECRET" }
+
+# ─── Compaction (LLM-based context management) ───────────────────────
+[compaction]
+threshold = 80           # Compact when messages exceed this count
+keep_recent = 20         # Keep this many recent messages after compaction
+max_summary_tokens = 1024
+
+# ─── Channel adapters ────────────────────────────────────────────────
+
+[matrix]
+enabled = true
+homeserver_env = "MATRIX_HOMESERVER"
+homeserver = "https://conduit.leopaska.xyz"  # default if env unset
+access_token_env = "MATRIX_ACCESS_TOKEN"
+user_id = "@vetinari:leopaska.xyz"
+default_room = "!homelab:leopaska.xyz"
+# Quiet-hours hook: Matrix posts during 23:00-07:00 require :p0:: tag.
+# OpenFang enforces via the [quiet_hours] section below.
+
+[telegram]
+enabled = true
+bot_token_env = "TELEGRAM_BOT_TOKEN"
+allowed_users = []  # Empty = trust the bot's per-prefix routing
+prefix = "/vetinari"
+
+[ntfy]
+enabled = true
+outbound_only = true
+default_topic_url = "https://ntfy.leopaska.xyz/vetinari"
+escalation_topic_url = "https://ntfy.leopaska.xyz/leo-ops"
+bearer_token_env = "NTFY_TOKEN"
+
+# Custom adapter pointing at the in-cluster bluebubbles-proxy. OpenFang
+# 0.6.x exposes a generic `webhook` adapter for this kind of proxied
+# channel.
+[bluebubbles]
+enabled = true
+type = "webhook"
+base_url = "http://bluebubbles-proxy.agents-shared.svc.cluster.local:8080"
+api_key_env = "BLUEBUBBLES_API_KEY"
+inbound_path = "/imessage/vetinari"
+outbound_path = "/imessage/vetinari/send"
+
+# ─── MCP servers ─────────────────────────────────────────────────────
+# Universal MCP tooling for cluster observability. Read-only filter.
+[[mcp_servers]]
+name = "homelab-devops"
+url = "http://mcp-server.ai.svc.cluster.local:8890"
+allowed_tools = [
+  # Cluster observability
+  "list_docker_containers", "get_container_logs",
+  "list_k8s_pods", "get_pod_logs",
+  # Database read-only
+  "list_databases", "execute_query",  # query is gated to SELECT-only at the MCP layer
+  "list_tables",
+  # Homelab service health
+  "service_health_check", "uptime_monitors",
+  "traefik_list_services",
+  # Metrics
+  "prometheus_query", "grafana_dashboards",
+  # Vector logs
+  "vector_logs",
+  # Memory (own + cross-sibling reads via per-graph allowlist)
+  "search_memory", "create_memory",
+  # System health
+  "health_check",
+  # Research (rare, for Sunday weekly reviews)
+  "deep_research",
+]
+
+# ─── Quiet hours ─────────────────────────────────────────────────────
+[quiet_hours]
+enabled = true
+window = "23:00-07:00"
+timezone = "America/New_York"
+suppress_outbound = ["bluebubbles", "ntfy", "telegram"]
+allow_outbound_on_p0 = true
+allow_inbound_always = true
+# Matrix posts during quiet hours require explicit :p0:: prefix.
+matrix_p0_tag_required = true
+
+# ─── Hard-kill ───────────────────────────────────────────────────────
+[hard_kill]
+sentinel_path = "/data/HARDSTOP-VETINARI"
+poll_interval_seconds = 30
+on_trigger = "graceful_exit"
+
+# ─── Heartbeat ───────────────────────────────────────────────────────
+[heartbeat]
+enabled = true
+interval = "30m"
+offset_minutes = 5  # :05 and :35 — 5-min offsets vs each sibling
+checks = [
+  "sibling_health",         # GET /health on each sibling's gateway URL
+  "sibling_journal_recency", # latest journal write timestamp per sibling
+  "open_loops_aging",        # flag :status:: open older than 24h
+  "killswitch_drift",        # weekly cron, but a quick check every heartbeat too
+]
+notify_on = ["P0", "P1"]
+
+# ─── Cron tasks ──────────────────────────────────────────────────────
+[cron]
+
+  [[cron.tasks]]
+  name = "memory-consolidate"
+  schedule = "15 4 * * *"  # 04:15 — staggered after Sancho (03:50)
+  prompt = """
+  Run memory consolidation on yesterday's journals across all 4 agents.
+  Read journals/Vetinari-{yesterday}.md, journals/Frick-{yesterday}.md,
+  journals/Frack-{yesterday}.md, journals/Sancho-{yesterday}.md.
+  Distill cross-agent decisions to pages/ai-memory/Vetinari/decisions.md.
+  Note coordination patterns that worked / didn't to
+  pages/ai-memory/Vetinari/coordination-patterns.md.
+  """
+  delivery = []  # silent
+
+  [[cron.tasks]]
+  name = "strategic-outlook"
+  schedule = "15 6 * * *"  # 06:15 — Sancho's 07:00 briefing reads this
+  prompt = """
+  Synthesize the next 24 hours across all 4 lanes:
+    - Sancho: read pages/world/calendar-context.md (Sancho refreshes at 06:00)
+    - Frack: read pages/world/businesses.md (Frack refreshes at 06:30)
+    - Frick: read pages/world/homelab-state.md (Frick refreshes at 06:00)
+    - Open-loops: read pages/world/open-loops.md
+  Produce a 4-paragraph strategic outlook covering the day's priorities,
+  cross-agent dependencies, and risks. Write to
+  pages/world/strategic-outlook.md.
+  """
+  delivery = []  # silent — Sancho's 07:00 briefing ingests this
+
+  [[cron.tasks]]
+  name = "open-loops-triage"
+  schedule = "30 17 * * *"  # 17:30 daily
+  prompt = """
+  Read pages/world/open-loops.md. For each block:
+    - If :status:: done with timestamp >24h, archive to
+      pages/world/open-loops-archive-YYYY-MM.md
+    - If :status:: open with no progress in 24h+, mark :stale:: true
+      and note the SLA breach
+    - If :owner:: doesn't match current agent capacity (e.g. Frack is
+      buried in customer comms but holds 5 P2s), propose reassignment
+      with a child block :proposed-owner:: and ping the new owner
+  Post a one-line summary to Matrix #homelab if any reassignments occurred.
+  """
+  delivery = ["matrix_if_changes"]
+
+  [[cron.tasks]]
+  name = "state-of-the-union"
+  schedule = "0 22 * * *"  # 22:00 daily — last fire before quiet hours
+  prompt = """
+  Synthesize today across all 4 lanes:
+    - Cluster (Frick): incidents, deploys, thermal events, ArgoCD drift
+    - Businesses (Frack): customer interactions, Stripe events, deploys, comms
+    - Personal (Sancho): calendar adherence, inbox, follow-ups completed
+    - Coordination (me): handoffs facilitated, SLA breaches, KILLSWITCH events
+  Read each agent's journal for today and the audit log entries.
+  Write the canonical state-of-the-union to pages/world/state-of-the-union.md.
+  Post a 2-paragraph summary to Matrix #homelab.
+  """
+  delivery = ["matrix"]
+
+  [[cron.tasks]]
+  name = "killswitch-drift-check"
+  schedule = "0 2 * * 0"  # Sunday 02:00 weekly
+  prompt = """
+  Read each agent's running config (Frick: settings.json, Frack:
+  openclaw.json, Sancho: hermes.toml). Compare each agent's
+  require_confirmation / confirm list against the canonical lists in
+  KILLSWITCH.md §4. Flag any agent whose enforced list is a subset of
+  the canonical (i.e. weakened). For each drift, append a block to
+  pages/world/open-loops.md with :owner:: leo :priority:: P1.
+  """
+  delivery = ["ntfy_leo_ops_if_drift"]
+
+  [[cron.tasks]]
+  name = "weekly-system-review"
+  schedule = "0 9 * * 0"  # Sunday 09:00 weekly
+  prompt = """
+  Week-over-week review:
+    - Heartbeat health per agent (frequency, missed beats)
+    - Open-loops throughput (opened / closed / stale this week)
+    - KILLSWITCH events (gated actions confirmed vs denied)
+    - Cross-agent handoffs (count, latency, success rate)
+    - Coordination decisions made and their outcomes
+  Identify 1-3 patterns and propose adjustments (cron staggering,
+  scope clarifications, handoff rule tweaks).
+  Write to pages/ai-memory/Vetinari/weekly-reviews/YYYY-MM-DD.md.
+  Post 3-bullet summary to Matrix.
+  """
+  delivery = ["matrix"]
+
+# ─── Logging / telemetry ─────────────────────────────────────────────
+[logging]
+level = "info"
+format = "json"
+output = "stdout"
+
+[telemetry]
+prometheus_metrics = true
+metrics_port = 9100
+
+# ─── Usage tracking footer ───────────────────────────────────────────
+usage_footer = "Tokens"  # Show per-message token counts in CLI output

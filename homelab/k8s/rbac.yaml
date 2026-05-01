@@ -1,0 +1,147 @@
+---
+# Vetinari's ServiceAccount. Pod uses this for cluster API calls.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: vetinari-ops
+  namespace: agents-shared
+  labels:
+    app.kubernetes.io/name: vetinari
+
+---
+# Cluster-wide read-only role. Vetinari observes the cluster as the
+# chief of staff; never mutates. Mutations are Frick's lane and require
+# Frick's RBAC + KILLSWITCH gating.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: vetinari-cluster-readonly
+rules:
+  # Core resources — read-only across all namespaces
+  - apiGroups: [""]
+    resources:
+      - pods
+      - pods/log
+      - services
+      - endpoints
+      - nodes
+      - namespaces
+      - events
+      - configmaps      # NOT secrets — those are off-limits
+      - resourcequotas
+      - limitranges
+      - persistentvolumeclaims
+      - persistentvolumes
+    verbs: [get, list, watch]
+
+  # Apps — Deployments / ReplicaSets / StatefulSets / DaemonSets
+  - apiGroups: [apps]
+    resources: [deployments, replicasets, statefulsets, daemonsets]
+    verbs: [get, list, watch]
+
+  # Networking — Ingresses, NetworkPolicies, Traefik IngressRoutes
+  - apiGroups: [networking.k8s.io]
+    resources: [ingresses, networkpolicies]
+    verbs: [get, list, watch]
+  - apiGroups: [traefik.io, traefik.containo.us]
+    resources: [ingressroutes, middlewares, tlsoptions]
+    verbs: [get, list, watch]
+
+  # Storage — Longhorn observability for graph + state volumes
+  - apiGroups: [longhorn.io]
+    resources: [volumes, replicas, engines, nodes, settings]
+    verbs: [get, list, watch]
+  - apiGroups: [storage.k8s.io]
+    resources: [storageclasses, csidrivers]
+    verbs: [get, list, watch]
+
+  # Batch — CronJobs / Jobs (sibling cron observability)
+  - apiGroups: [batch]
+    resources: [cronjobs, jobs]
+    verbs: [get, list, watch]
+
+  # ArgoCD Applications / ApplicationSets — drift detection
+  - apiGroups: [argoproj.io]
+    resources: [applications, applicationsets, appprojects]
+    verbs: [get, list, watch]
+
+  # CNPG Postgres — observability of the shared homelab-pg cluster
+  - apiGroups: [postgresql.cnpg.io]
+    resources: [clusters, backups, scheduledbackups, poolers]
+    verbs: [get, list, watch]
+
+  # Metrics — for resource-utilization queries
+  - apiGroups: [metrics.k8s.io]
+    resources: [pods, nodes]
+    verbs: [get, list]
+
+  # Authorization checks — for "can I do X" introspection
+  - apiGroups: [authorization.k8s.io]
+    resources: [selfsubjectaccessreviews, selfsubjectrulesreviews]
+    verbs: [create]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: vetinari-cluster-readonly
+subjects:
+  - kind: ServiceAccount
+    name: vetinari-ops
+    namespace: agents-shared
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: vetinari-cluster-readonly
+
+---
+# Self-management role inside agents-shared — Vetinari can read its
+# own state PVC and ConfigMaps for self-introspection (e.g. "what is
+# my current memory.* setting?"). NO mutations.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: vetinari-self
+  namespace: agents-shared
+rules:
+  - apiGroups: [""]
+    resources: [configmaps, secrets]
+    resourceNames:
+      - vetinari-persona
+      - vetinari-openfang-config
+      - vetinari-agent-config
+      - vetinari-skills
+      # Secrets only readable by name — Vetinari never lists all secrets
+      - vetinari-secrets
+      - ghcr-credentials
+    verbs: [get]
+  - apiGroups: [""]
+    resources: [persistentvolumeclaims]
+    resourceNames:
+      - vetinari-state
+      - vetinari-graph
+      - frick-graph
+      - frack-graph
+      - sancho-graph
+      - leo-graph
+      - syncthing-config
+    verbs: [get, list]
+  - apiGroups: [apps]
+    resources: [deployments]
+    resourceNames: [vetinari]
+    verbs: [get]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: vetinari-self
+  namespace: agents-shared
+subjects:
+  - kind: ServiceAccount
+    name: vetinari-ops
+    namespace: agents-shared
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: vetinari-self

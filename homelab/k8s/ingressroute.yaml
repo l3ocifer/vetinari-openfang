@@ -1,0 +1,26 @@
+---
+# Vetinari's HTTP API at vetinari.leopaska.xyz — Authelia in front.
+# Used by:
+#   • Leo's MacBook (`openfang chat vetinari` thin client)
+#   • Vetinari's own `/api/cron/run/*` triggers from the heartbeat job
+#   • A2A inbound from siblings (less common — they route via
+#     ofp:50051 directly inside the cluster)
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: vetinari
+  namespace: agents-shared
+spec:
+  entryPoints: [websecure]
+  routes:
+    - match: Host(`vetinari.leopaska.xyz`)
+      kind: Rule
+      services:
+        - name: vetinari
+          namespace: agents-shared
+          port: 4200
+      middlewares:
+        - name: authelia
+          namespace: security
+  tls:
+    certResolver: letsencrypt-prod

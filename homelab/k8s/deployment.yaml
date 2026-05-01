@@ -1,0 +1,166 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vetinari
+  namespace: agents-shared
+  labels:
+    app.kubernetes.io/name: vetinari
+    app.kubernetes.io/component: agent
+spec:
+  replicas: 1  # OpenFang's audit chain is single-writer; canonical
+               # memory in Postgres provides the HA story.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: vetinari
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: vetinari
+        app.kubernetes.io/component: agent
+    spec:
+      # ── Scheduling ─────────────────────────────────────────────────
+      # NO nodeSelector — Vetinari floats. Soft preference for thebeast
+      # (more headroom) but the scheduler is free to land elsewhere if
+      # thebeast is full / drained / cordoned. Longhorn handles graph +
+      # state PVC mounting wherever the pod lands.
+      affinity:
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 70
+              preference:
+                matchExpressions:
+                  - key: kubernetes.io/hostname
+                    operator: In
+                    values: [thebeast]
+            - weight: 30
+              preference:
+                matchExpressions:
+                  - key: kubernetes.io/hostname
+                    operator: In
+                    values: [alef]
+      serviceAccountName: vetinari-ops
+      restartPolicy: Always
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      containers:
+        - name: openfang
+          image: ghcr.io/l3ocifer/vetinari-openfang:latest
+          imagePullPolicy: Always
+          command: ["openfang"]
+          args:
+            - "start"
+            - "--config=/data/openfang/config.toml"
+          env:
+            - name: AGENT_NAME
+              value: "Vetinari"
+            - name: AGENT_ID
+              value: "vetinari"
+            - name: OPENFANG_HOME
+              value: "/data/openfang"
+            - name: OPENFANG_LISTEN
+              value: "0.0.0.0:4200"
+            - name: TZ
+              value: "America/New_York"
+            - name: HARDSTOP_PATH
+              value: "/data/HARDSTOP-VETINARI"
+            - name: RUST_LOG
+              value: "info,openfang=info"
+          envFrom:
+            - secretRef:
+                name: vetinari-secrets
+          ports:
+            - name: api
+              containerPort: 4200
+              protocol: TCP
+            - name: ofp
+              containerPort: 50051
+              protocol: TCP
+            - name: metrics
+              containerPort: 9100
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: api
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            failureThreshold: 5
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: api
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: "200m"
+              memory: "512Mi"
+            limits:
+              memory: "4Gi"
+          volumeMounts:
+            # OpenFang home — config, agents/, sessions/, audit chain
+            - name: state
+              mountPath: /data/openfang
+              subPath: openfang
+            # Hard-kill sentinel directory (PVC subpath at root /data)
+            - name: state
+              mountPath: /data
+              subPath: hardstop
+            # Persona files (SOUL.md / TOOLS.md / shared docs) overlay
+            # /data/openfang/workspace at runtime
+            - name: persona
+              mountPath: /data/openfang/workspace
+              readOnly: true
+            # OpenFang daemon config (single-file mount via subPath)
+            - name: openfang-config
+              mountPath: /data/openfang/config.toml
+              subPath: config.toml
+              readOnly: true
+            # Agent definition for `vetinari` agent (single-file mount)
+            - name: agent-config
+              mountPath: /data/openfang/agents/vetinari/agent.toml
+              subPath: agent.toml
+              readOnly: true
+            # Skills — optional; loaded from unified-ai-configs/skills/
+            - name: skills
+              mountPath: /data/openfang/skills
+              readOnly: true
+            # ── Longhorn-RWX graph mounts ──────────────────────────────
+            # Five PVCs in this same `agents-shared` namespace, defined
+            # in argocd/apps/_agents/syncthing-graphs/pvc.yaml. RWX so
+            # the syncthing-graphs pod and Vetinari can mount them
+            # concurrently regardless of where each lands.
+            - { name: graph-vetinari, mountPath: /data/graphs/vetinari }
+            - { name: graph-frick,    mountPath: /data/graphs/frick,    readOnly: true }
+            - { name: graph-frack,    mountPath: /data/graphs/frack,    readOnly: true }
+            - { name: graph-sancho,   mountPath: /data/graphs/sancho,   readOnly: true }
+            - { name: graph-quirm,    mountPath: /data/graphs/quirm,    readOnly: true }
+            - { name: graph-vimes,    mountPath: /data/graphs/vimes,    readOnly: true }
+            - { name: graph-puck,     mountPath: /data/graphs/puck,     readOnly: true }
+            - { name: graph-leo,      mountPath: /data/graphs/leo }
+              # NOT readOnly — Vetinari writes to pages/world/{open-loops,
+              # state-of-the-union, strategic-outlook,orchestrations}.md
+              # and pages/agent-contributions/vetinari/. Per-file write
+              # enforcement happens in OpenFang's runtime memory layer
+              # (memory.logseq.graphs[].writable_paths in openfang.toml).
+      volumes:
+        - { name: state,            persistentVolumeClaim: { claimName: vetinari-state } }
+        - { name: persona,          configMap: { name: vetinari-persona } }
+        - { name: openfang-config,  configMap: { name: vetinari-openfang-config } }
+        - { name: agent-config,     configMap: { name: vetinari-agent-config } }
+        - { name: skills,           configMap: { name: vetinari-skills, optional: true } }
+        - { name: graph-vetinari,   persistentVolumeClaim: { claimName: vetinari-graph } }
+        - { name: graph-frick,      persistentVolumeClaim: { claimName: frick-graph } }
+        - { name: graph-frack,      persistentVolumeClaim: { claimName: frack-graph } }
+        - { name: graph-sancho,     persistentVolumeClaim: { claimName: sancho-graph } }
+        - { name: graph-quirm,      persistentVolumeClaim: { claimName: quirm-graph } }
+        - { name: graph-vimes,      persistentVolumeClaim: { claimName: vimes-graph } }
+        - { name: graph-puck,       persistentVolumeClaim: { claimName: puck-graph } }
+        - { name: graph-leo,        persistentVolumeClaim: { claimName: leo-graph } }
+      imagePullSecrets:
+        - name: ghcr-credentials

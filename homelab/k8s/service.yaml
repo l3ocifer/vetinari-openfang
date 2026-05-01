@@ -1,0 +1,25 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vetinari
+  namespace: agents-shared
+  labels:
+    app.kubernetes.io/name: vetinari
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: vetinari
+  ports:
+    - name: api
+      port: 4200
+      targetPort: api
+      protocol: TCP
+    - name: ofp
+      port: 50051
+      targetPort: ofp
+      protocol: TCP
+    - name: metrics
+      port: 9100
+      targetPort: metrics
+      protocol: TCP
