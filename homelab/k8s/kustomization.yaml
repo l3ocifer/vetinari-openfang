@@ -43,7 +43,7 @@ configMapGenerator:
       - agent.toml=../config/agent.toml
 
 generatorOptions:
-  disableNameSuffixHash: false  # Hash suffix → Deployment rolls on edit
+  disableNameSuffixHash: true  # Stable names — deployment volumes reference unhashed configmap names
 
 commonLabels:
   app.kubernetes.io/part-of: agents
