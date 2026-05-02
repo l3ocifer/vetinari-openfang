@@ -18,8 +18,10 @@ tags = ["chief-of-staff", "coordinator", "synthesizer", "homelab", "multi-agent"
 
 # ─── Model ───────────────────────────────────────────────────────────
 [model]
-provider = "default"  # Inherits [default_model] from openfang.toml (LiteLLM/chat)
-model = "default"
+provider = "openai_compatible"
+model = "chat"
+base_url = "http://litellm.inference.svc.cluster.local:4000/v1"
+api_key_env = "LITELLM_API_KEY"
 max_tokens = 8192
 temperature = 0.3  # Coordination decisions favor consistency over creativity
 system_prompt = """
@@ -157,7 +159,7 @@ shell = [
 # Network capability gates outbound HTTP/TCP. Cluster-internal only.
 network = [
   "*.svc.cluster.local",
-  "litellm.ai.svc.cluster.local",
+  "litellm.inference.svc.cluster.local",
   "homelab-pg-rw.databases.svc.cluster.local",
   "homelab-pg-ro.databases.svc.cluster.local",
   "ntfy.leopaska.xyz",

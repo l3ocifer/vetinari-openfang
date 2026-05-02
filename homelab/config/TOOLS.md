@@ -28,7 +28,7 @@ What's wired up, where it lives, and how to use it. Lives in
 
 ## Models
 
-Routed via LiteLLM at `http://litellm.ai.svc.cluster.local:4000/v1`.
+Routed via LiteLLM at `http://litellm.inference.svc.cluster.local:4000/v1`.
 OpenFang's "default provider" mechanism points at LiteLLM and uses
 the same alias names the siblings use:
 
@@ -57,8 +57,8 @@ gated; routine work stays local. Configured under
 
 | Service | URL (in-cluster) | Why |
 |---|---|---|
-| LiteLLM | `http://litellm.ai.svc.cluster.local:4000/v1` | All inference |
-| MCP devops | `http://mcp-server.ai.svc.cluster.local:8890` | Read-only kubectl + Prom + Loki for observability |
+| LiteLLM | `http://litellm.inference.svc.cluster.local:4000/v1` | All inference |
+| MCP devops | `http://external-mcp.ironclaw.svc.cluster.local:8890` | Read-only kubectl + Prom + Loki for observability |
 | Postgres (mine) | `postgres://openfang_vetinari@homelab-pg-rw.databases.svc.cluster.local:5432/openfang_vetinari` | Memory back-end (RW) — sealed in `vetinari-secrets.DATABASE_URL` |
 | Postgres (sibling) | `postgres://vetinari_ro@homelab-pg-ro.databases.svc.cluster.local:5432/<sibling-db>` | Read-only on `ironclaw`, `openclaw_frack`, `hermes_sancho` for cross-agent observability |
 | ntfy | `https://ntfy.leopaska.xyz/{vetinari,leo-ops}` | Push to Leo's phone |

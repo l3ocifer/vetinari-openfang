@@ -183,7 +183,7 @@ Leo's review.
 
 ### Models
 
-Routed via LiteLLM at `http://litellm.ai.svc.cluster.local:4000/v1`:
+Routed via LiteLLM at `http://litellm.inference.svc.cluster.local:4000/v1`:
 
 | OpenFang alias | Backend (today) | Use case |
 |---|---|---|

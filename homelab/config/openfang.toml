@@ -21,7 +21,7 @@ api_listen = "0.0.0.0:4200"
 [default_model]
 provider = "openai_compatible"
 model = "chat"  # LiteLLM alias — currently qwen2.5-coder:32b via vllm-chat
-base_url = "http://litellm.ai.svc.cluster.local:4000/v1"
+base_url = "http://litellm.inference.svc.cluster.local:4000/v1"
 api_key_env = "LITELLM_API_KEY"
 
 # ─── Memory ──────────────────────────────────────────────────────────
@@ -48,11 +48,7 @@ decay_rate = 0.05
   enabled = true
   graphs = [
     { name = "vetinari", path = "/data/graphs/vetinari", access = "rw" },
-    { name = "leo",      path = "/data/graphs/leo",      access = "r+w-restricted",
-      writable_paths = ["pages/world/open-loops.md",
-                        "pages/world/state-of-the-union.md",
-                        "pages/world/strategic-outlook.md",
-                        "pages/agent-contributions/vetinari/"] },
+    { name = "leo",      path = "/data/graphs/leo",      access = "r+w-restricted", writable_paths = ["pages/world/open-loops.md", "pages/world/state-of-the-union.md", "pages/world/strategic-outlook.md", "pages/agent-contributions/vetinari/"] },
     { name = "frick",  path = "/data/graphs/frick",  access = "r" },
     { name = "frack",  path = "/data/graphs/frack",  access = "r" },
     { name = "sancho", path = "/data/graphs/sancho", access = "r" },
@@ -61,7 +57,7 @@ decay_rate = 0.05
 
   [memory.embeddings]
   provider = "openai_compatible"
-  base_url = "http://litellm.ai.svc.cluster.local:4000/v1"
+  base_url = "http://litellm.inference.svc.cluster.local:4000/v1"
   api_key_env = "LITELLM_API_KEY"
   model = "embed"
   dim = 1024
@@ -150,7 +146,7 @@ outbound_path = "/imessage/vetinari/send"
 # Universal MCP tooling for cluster observability. Read-only filter.
 [[mcp_servers]]
 name = "homelab-devops"
-url = "http://mcp-server.ai.svc.cluster.local:8890"
+transport = { type = "http", url = "http://external-mcp.ironclaw.svc.cluster.local:8890" }
 allowed_tools = [
   # Cluster observability
   "list_docker_containers", "get_container_logs",
