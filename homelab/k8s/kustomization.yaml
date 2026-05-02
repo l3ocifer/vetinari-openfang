@@ -45,6 +45,8 @@ configMapGenerator:
 generatorOptions:
   disableNameSuffixHash: true  # Stable names — deployment volumes reference unhashed configmap names
 
-commonLabels:
-  app.kubernetes.io/part-of: agents
-  app.kubernetes.io/managed-by: argocd
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: agents
+      app.kubernetes.io/managed-by: argocd
+    includeSelectors: false
