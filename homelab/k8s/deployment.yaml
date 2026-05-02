@@ -15,11 +15,15 @@ spec:
   selector:
     matchLabels:
       app.kubernetes.io/name: vetinari
+      app.kubernetes.io/part-of: agents
+      app.kubernetes.io/managed-by: argocd
   template:
     metadata:
       labels:
         app.kubernetes.io/name: vetinari
         app.kubernetes.io/component: agent
+        app.kubernetes.io/part-of: agents
+        app.kubernetes.io/managed-by: argocd
     spec:
       # ── Scheduling ─────────────────────────────────────────────────
       # NO nodeSelector — Vetinari floats. Soft preference for thebeast
