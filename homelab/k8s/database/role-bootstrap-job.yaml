@@ -20,7 +20,7 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  generateName: vetinari-role-bootstrap-
+  name: vetinari-role-bootstrap
   namespace: databases
   annotations:
     argocd.argoproj.io/sync-wave: "0"
