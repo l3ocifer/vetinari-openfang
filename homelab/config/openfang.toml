@@ -295,6 +295,22 @@ notify_on = ["P0", "P1"]
   """
   delivery = ["matrix"]
 
+# ─── Fleet event bus ─────────────────────────────────────────────────
+# Durable async A2A backbone shared by all seven agents. Backed by
+# Postgres LISTEN/NOTIFY on the `fleet` database (schema in
+# scripts/agents/sql/fleet-schema.sql, applied declaratively by
+# argocd/apps/_postgres/fleet-schema-job.yaml in the homelab repo).
+# Connection string sealed in vetinari-secrets as FLEET_DATABASE_URL.
+[fleet]
+enabled = true
+agent_id = "vetinari"
+database_url_env = "FLEET_DATABASE_URL"
+notify_channel = "fleet_events_new"
+# Vetinari is chief of staff — coordinates the fleet. He wakes for
+# every event, period. The audit-chain mirror needs the full firehose
+# anyway.
+inbound_predicate = "true"
+
 # ─── Logging / telemetry ─────────────────────────────────────────────
 [logging]
 level = "info"
