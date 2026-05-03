@@ -242,9 +242,9 @@ notify_on = ["P0", "P1"]
     - If :owner:: doesn't match current agent capacity (e.g. Frack is
       buried in customer comms but holds 5 P2s), propose reassignment
       with a child block :proposed-owner:: and ping the new owner
-  Post a one-line summary to Matrix #homelab if any reassignments occurred.
+  Send a one-line summary via BlueBubbles/iMessage if any reassignments occurred.
   """
-  delivery = ["matrix_if_changes"]
+  delivery = ["bluebubbles_if_changes"]
 
   [[cron.tasks]]
   name = "state-of-the-union"
@@ -257,9 +257,9 @@ notify_on = ["P0", "P1"]
     - Coordination (me): handoffs facilitated, SLA breaches, KILLSWITCH events
   Read each agent's journal for today and the audit log entries.
   Write the canonical state-of-the-union to pages/world/state-of-the-union.md.
-  Post a 2-paragraph summary to Matrix #homelab.
+  Send a 2-paragraph summary via BlueBubbles/iMessage.
   """
-  delivery = ["matrix"]
+  delivery = ["bluebubbles"]
 
   [[cron.tasks]]
   name = "killswitch-drift-check"
@@ -272,7 +272,7 @@ notify_on = ["P0", "P1"]
   the canonical (i.e. weakened). For each drift, append a block to
   pages/world/open-loops.md with :owner:: leo :priority:: P1.
   """
-  delivery = ["ntfy_leo_ops_if_drift"]
+  delivery = ["bluebubbles_if_drift"]
 
   [[cron.tasks]]
   name = "weekly-system-review"
@@ -287,9 +287,9 @@ notify_on = ["P0", "P1"]
   Identify 1-3 patterns and propose adjustments (cron staggering,
   scope clarifications, handoff rule tweaks).
   Write to pages/ai-memory/Vetinari/weekly-reviews/YYYY-MM-DD.md.
-  Post 3-bullet summary to Matrix.
+  Send 3-bullet summary via BlueBubbles/iMessage.
   """
-  delivery = ["matrix"]
+  delivery = ["bluebubbles"]
 
 # ─── Fleet event bus ─────────────────────────────────────────────────
 # Durable async A2A backbone shared by all seven agents. Backed by

@@ -63,9 +63,9 @@ CORE WORKFLOWS:
 
 - **Strategic outlook** (06:15 daily): Synthesize next-24h calendar (Sancho's pages/world/calendar-context.md), business state (Frack's pages/world/businesses.md), and cluster health (Frick's pages/world/homelab-state.md). Produce 4-paragraph outlook to pages/world/strategic-outlook.md. Sancho's 07:00 morning briefing ingests this.
 
-- **State-of-the-union** (22:00 daily): Synthesize today across all 4 lanes. Write canonical snapshot to pages/world/state-of-the-union.md. Post 2-paragraph summary to Matrix.
+- **State-of-the-union** (22:00 daily): Synthesize today across all 4 lanes. Write canonical snapshot to pages/world/state-of-the-union.md. Send 2-paragraph summary via BlueBubbles/iMessage.
 
-- **Drift detection** (Sun 02:00 weekly): Diff each agent's running config against KILLSWITCH.md §4. If drift, append P1 block to open-loops + ntfy `leo-ops`.
+- **Drift detection** (Sun 02:00 weekly): Diff each agent's running config against KILLSWITCH.md §4. If drift, append P1 block to open-loops + BlueBubbles/iMessage Leo.
 
 - **Weekly system review** (Sun 09:00 weekly): Identify 1-3 patterns from the week. Propose adjustments to cron staggering / scope / handoff rules.
 

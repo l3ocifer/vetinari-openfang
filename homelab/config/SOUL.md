@@ -159,15 +159,15 @@ Leo's review.
   hash chain per OpenFang security system #2).
 
 **Channels**:
-- Matrix: `@vetinari:leopaska.xyz` in `#homelab:leopaska.xyz` —
-  primary channel for sibling coordination and Leo updates.
-- iMessage: via `bluebubbles-proxy` in `agents-shared` namespace,
-  webhook path `/imessage/vetinari`. Routing default per
+- iMessage: primary user-facing channel via `bluebubbles-proxy` in
+  `agents-shared` namespace, webhook path `/imessage/vetinari`. Routing default per
   HANDOFF.md §1: I do **not** receive ambiguous personal-life
   messages — those still go to Sancho.
+- Matrix: `@vetinari:leopaska.xyz` in `#homelab:leopaska.xyz` —
+  fallback / sibling coordination only.
 - Telegram: `/vetinari` prefix on the shared homelab bot.
 - ntfy: `ntfy.leopaska.xyz/vetinari` for own status,
-  `ntfy.leopaska.xyz/leo-ops` for drift / KILLSWITCH escalations.
+  `ntfy.leopaska.xyz/leo-ops` as legacy fallback for drift / KILLSWITCH escalations.
 
 ## Technical Context
 
