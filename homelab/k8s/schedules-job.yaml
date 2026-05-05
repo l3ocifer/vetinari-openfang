@@ -80,6 +80,82 @@ spec:
               print(f"vetinari agent_id = {agent_id}", flush=True)
 
               DESIRED = [
+                  # ─── Daily/weekly synthesis (frontier-pinned) ───
+                  # These were the old synthesis schedules; now upgraded
+                  # to read the rolling dashboard.md (built by the
+                  # high-frequency loop below) instead of re-scanning
+                  # every sibling graph from scratch. Output context
+                  # stays well under frontier's 64 K input ceiling.
+                  {
+                      "name": "state-of-the-union",
+                      "cron": "0 22 * * *",
+                      "model_override": "frontier",
+                      "timeout_secs": 600,
+                      "enabled": True,
+                      "message": (
+                          "DAILY SYNTHESIS (frontier model). "
+                          "Read /data/graphs/vetinari/pages/world/dashboard.md "
+                          "(built every 15 min by sibling-pulse, fleet-events-tail, "
+                          "open-loops-scan, bench-watch). "
+                          "Synthesize today across the four lanes "
+                          "(cluster, businesses, personal, coordination). "
+                          "Write the result to /data/graphs/leo/pages/world/state-of-the-union.md "
+                          "(overwrite). Then post a 5-bullet summary to the homelab Matrix room."
+                      ),
+                  },
+                  {
+                      "name": "strategic-outlook",
+                      "cron": "15 6 * * *",
+                      "model_override": "frontier",
+                      "timeout_secs": 600,
+                      "enabled": True,
+                      "message": (
+                          "MORNING STRATEGIC OUTLOOK (frontier model). "
+                          "Read /data/graphs/vetinari/pages/world/dashboard.md and "
+                          "/data/graphs/leo/pages/world/state-of-the-union.md (yesterday's snapshot). "
+                          "Synthesize the next 24h across Sancho (personal), Frack (business ops), "
+                          "Frick (cluster), and open-loops. Identify the top 3 things Leo should "
+                          "do today and the top 3 risks to surface. "
+                          "Write to /data/graphs/leo/pages/world/strategic-outlook.md (overwrite). "
+                          "Send a concise 4-line iMessage to Leo via BlueBubbles."
+                      ),
+                  },
+                  {
+                      "name": "weekly-system-review",
+                      "cron": "0 9 * * 0",
+                      "model_override": "frontier",
+                      "timeout_secs": 1200,
+                      "enabled": True,
+                      "message": (
+                          "WEEKLY SYSTEM REVIEW (frontier model, deepest pass). "
+                          "Read all daily state-of-the-union snapshots from the past 7 days at "
+                          "/data/graphs/leo/pages/world/state-of-the-union*.md (or "
+                          "/data/graphs/vetinari/journals/ if archived). "
+                          "Review: (1) heartbeat health per agent, (2) open-loop throughput "
+                          "(opened vs closed, median age), (3) any KILLSWITCH events, "
+                          "(4) cross-agent handoffs that succeeded vs broke, "
+                          "(5) coordination decisions and their outcomes. "
+                          "Write to /data/graphs/leo/pages/world/weekly-review-$(date +%%Y-W%%U).md "
+                          "and post a Matrix #homelab summary."
+                      ),
+                  },
+                  {
+                      "name": "killswitch-drift-check",
+                      "cron": "0 2 * * 0",
+                      "model_override": "frontier",
+                      "timeout_secs": 600,
+                      "enabled": True,
+                      "message": (
+                          "WEEKLY KILLSWITCH DRIFT CHECK (frontier model). "
+                          "For each sibling (frick, frack, sancho, quirm, vimes, puck): "
+                          "read /data/graphs/$AGENT/SOUL.md, KILLSWITCH.md, and the live config "
+                          "(fetched via `kubectl -n agents-shared get configmap $AGENT-config -o yaml`). "
+                          "Compare against KILLSWITCH.md section 4 invariants. Flag any drift "
+                          "as P1 in /data/graphs/leo/pages/world/open-loops.md with a clear remediation. "
+                          "Post a #homelab Matrix summary."
+                      ),
+                  },
+                  # ─── High-frequency loop (chat-pinned, dashboard builders) ───
                   {
                       "name": "sibling-pulse",
                       "cron": "*/15 * * * *",
