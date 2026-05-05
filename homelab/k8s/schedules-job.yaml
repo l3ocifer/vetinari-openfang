@@ -1,0 +1,209 @@
+---
+# Vetinari high-frequency subagent loop.
+#
+# Vetinari's existing schedules are big-context daily/weekly synthesis
+# passes that timed out under the chat-window limit. The pattern fix:
+#
+#   1. Many small frequent schedules append rolling state to one file
+#      at /data/graphs/vetinari/pages/world/dashboard.md.
+#   2. Daily synthesis (state-of-the-union, strategic-outlook) reads
+#      that dashboard instead of scanning every sibling graph from
+#      scratch. Context drops from O(7 graphs) to O(1 page).
+#
+# This Job (one-shot, idempotent) seeds the high-frequency half:
+#
+#   sibling-pulse        every 15m  who-did-what-recently per agent
+#   fleet-events-tail    every  5m  surface P0/P1 fleet_events
+#   open-loops-scan      every 30m  read each agent's open-loops.md
+#   bench-watch          every 30m  poll Quirm bench.findings unseen
+#   kanban-tick          hourly      age open-loops, escalate stale
+#   drift-detect         every  2h  compare current vs last snapshot
+#
+# All run with model_override="chat" (cheap, 32k window) and
+# timeout_secs=90. Re-running the Job is safe: it deletes any
+# schedule with a matching name first, then re-creates from this list.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: vetinari-seed-schedules
+  namespace: agents-shared
+  annotations:
+    argocd.argoproj.io/sync-wave: "10"
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation,HookSucceeded
+spec:
+  ttlSecondsAfterFinished: 3600
+  backoffLimit: 5
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: vetinari-seed-schedules
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: seed
+          image: python:3.12-slim
+          command: ["sh", "-c"]
+          args:
+            - |
+              set -eu
+              pip install --quiet --no-cache-dir 'httpx==0.28.*'
+
+              # The vetinari-headless Service routes to the openfang-api
+              # port on the running Vetinari pod. We don't have an
+              # auth token requirement on /api/schedules inside the
+              # cluster (Authelia gates the IngressRoute, not the Svc).
+              cat > /tmp/seed.py <<'PY'
+              import json, os, sys, time
+              import httpx
+              BASE = os.environ.get("VETINARI_API", "http://vetinari.agents-shared.svc.cluster.local:4200")
+
+              # Wait until /api/schedules answers (Vetinari may still be
+              # rolling). 60-attempt budget at 5s each = 5min.
+              for attempt in range(60):
+                  try:
+                      r = httpx.get(f"{BASE}/api/schedules", timeout=5)
+                      r.raise_for_status()
+                      schedules = r.json()["schedules"]
+                      break
+                  except Exception as e:
+                      if attempt == 59:
+                          raise
+                      print(f"waiting for vetinari api ({attempt+1}/60): {e}", flush=True)
+                      time.sleep(5)
+
+              if not schedules:
+                  print("ERROR: vetinari has no existing schedules — agent_id unknown", file=sys.stderr)
+                  sys.exit(2)
+
+              agent_id = schedules[0]["agent_id"]
+              print(f"vetinari agent_id = {agent_id}", flush=True)
+
+              DESIRED = [
+                  {
+                      "name": "sibling-pulse",
+                      "cron": "*/15 * * * *",
+                      "model_override": "chat",
+                      "timeout_secs": 90,
+                      "enabled": True,
+                      "message": (
+                          "QUICK TASK (≤30s, no canonical-context reload). "
+                          "For each of the six siblings (frick, frack, sancho, quirm, vimes, puck): "
+                          "(a) get their pod's last log line via `kubectl -n agents-shared logs deploy/$NAME --tail=1` and "
+                          "(b) check their last cron run from /data/graphs/$NAME/journals/ "
+                          "(latest .md, last line). "
+                          "Append one bullet per sibling to /data/graphs/vetinari/pages/world/dashboard.md "
+                          "under a section ## Pulse <UTC timestamp> — overwrite any prior section newer than 60min. "
+                          "Format: `- frick: <one-line>`. No prose, no synthesis. If a sibling is silent, write `silent`."
+                      ),
+                  },
+                  {
+                      "name": "fleet-events-tail",
+                      "cron": "*/5 * * * *",
+                      "model_override": "chat",
+                      "timeout_secs": 60,
+                      "enabled": True,
+                      "message": (
+                          "QUICK TASK (≤20s). Connect to FLEET_DATABASE_URL and run: "
+                          "SELECT severity, kind, source, target, summary, created_at "
+                          "FROM fleet_events "
+                          "WHERE created_at > now() - interval '5 minutes' "
+                          "AND severity IN ('p0','p1','important','urgent') "
+                          "ORDER BY created_at DESC. "
+                          "If 0 rows, do nothing. Otherwise post a one-line bullet for each to the homelab Matrix room "
+                          "and append to /data/graphs/vetinari/pages/world/dashboard.md ## Fleet section."
+                      ),
+                  },
+                  {
+                      "name": "open-loops-scan",
+                      "cron": "*/30 * * * *",
+                      "model_override": "chat",
+                      "timeout_secs": 90,
+                      "enabled": True,
+                      "message": (
+                          "QUICK TASK. Read /data/graphs/$AGENT/pages/world/open-loops.md for each "
+                          "of frick, frack, sancho, quirm, vimes, puck. Count items, find any tagged "
+                          "[p0] or [p1] created in the last hour. "
+                          "Update /data/graphs/vetinari/pages/world/dashboard.md ## Open-loops section "
+                          "with a 7-line table (Agent | Total | P0 | P1 | Oldest). "
+                          "Do NOT synthesize, do NOT recommend. The daily strategic-outlook job does that."
+                      ),
+                  },
+                  {
+                      "name": "bench-watch",
+                      "cron": "*/30 * * * *",
+                      "model_override": "chat",
+                      "timeout_secs": 60,
+                      "enabled": True,
+                      "message": (
+                          "QUICK TASK. Reach Quirm's hermes_quirm DB via FLEET_DATABASE_URL "
+                          "(same postgres cluster, just \\connect): "
+                          "SELECT count(*) FROM bench.findings WHERE seen_by_user=false AND severity IN ('important','urgent'); "
+                          "SELECT model, prompt_id, summary FROM bench.findings "
+                          "WHERE seen_by_user=false AND severity IN ('important','urgent') "
+                          "ORDER BY created_at DESC LIMIT 5. "
+                          "Update /data/graphs/vetinari/pages/world/dashboard.md ## Bench section. "
+                          "If urgent (count>=3 OR severity='urgent') ping Leo via Matrix DM."
+                      ),
+                  },
+                  {
+                      "name": "kanban-tick",
+                      "cron": "0 * * * *",
+                      "model_override": "chat",
+                      "timeout_secs": 90,
+                      "enabled": True,
+                      "message": (
+                          "Hourly kanban tick. Read /data/graphs/leo/pages/world/open-loops.md. "
+                          "For each item: parse the YAML front-matter (or first-line metadata) for "
+                          "`opened:` date. If opened > 3 days ago and `closed:` is absent, mark "
+                          "with `[stale]` tag. If opened > 7 days, also send a Matrix DM to Leo "
+                          "naming the item. Do not delete or close anything — Leo decides."
+                      ),
+                  },
+                  {
+                      "name": "drift-detect",
+                      "cron": "0 */2 * * *",
+                      "model_override": "chat",
+                      "timeout_secs": 120,
+                      "enabled": True,
+                      "message": (
+                          "Drift detection. Compare /data/graphs/vetinari/pages/world/dashboard.md "
+                          "(current rolling state) vs /data/graphs/leo/pages/world/state-of-the-union.md "
+                          "(last synthesized snapshot). If a sibling has gone from silent→active or "
+                          "active→silent, or open-loop counts shifted by >5 since the last snapshot, "
+                          "log a one-line entry to /data/graphs/vetinari/journals/$(date +%%Y_%%m_%%d).md. "
+                          "If drift score is high (>=3 channels of change), enqueue a fresh "
+                          "state-of-the-union run via POST /api/schedules/state-of-the-union/trigger."
+                      ),
+                  },
+              ]
+
+              # Index existing by name for idempotent upsert.
+              by_name = {s["name"]: s["id"] for s in schedules}
+
+              for spec in DESIRED:
+                  if spec["name"] in by_name:
+                      old_id = by_name[spec["name"]]
+                      r = httpx.delete(f"{BASE}/api/schedules/{old_id}", timeout=10)
+                      print(f"deleted old {spec['name']} ({old_id}): {r.status_code}", flush=True)
+                  payload = {
+                      "name": spec["name"],
+                      "agent_id": agent_id,
+                      "cron": spec["cron"],
+                      "message": spec["message"],
+                      "enabled": spec["enabled"],
+                      "timeout_secs": spec["timeout_secs"],
+                      "model_override": spec["model_override"],
+                  }
+                  r = httpx.post(f"{BASE}/api/schedules", json=payload, timeout=10)
+                  print(f"created {spec['name']}: {r.status_code} {r.text[:200]}", flush=True)
+                  r.raise_for_status()
+
+              print(f"\\nseeded {len(DESIRED)} schedules. final list:", flush=True)
+              for s in httpx.get(f"{BASE}/api/schedules", timeout=10).json()["schedules"]:
+                  print(f"  {s['name']:25s} cron={s['cron']:14s} enabled={s['enabled']}", flush=True)
+              PY
+              exec python /tmp/seed.py
+          resources:
+            requests: { cpu: "20m", memory: "64Mi" }
+            limits:   { cpu: "200m", memory: "256Mi" }
