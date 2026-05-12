@@ -126,7 +126,7 @@ spec:
                   },
                   {
                       "name": "weekly-system-review",
-                      "cron": "0 9 * * 0",
+                      "cron": "0 9 * * SUN",
                       "model_override": "frontier",
                       "timeout_secs": 1200,
                       "enabled": True,
@@ -145,7 +145,7 @@ spec:
                   },
                   {
                       "name": "killswitch-drift-check",
-                      "cron": "0 2 * * 0",
+                      "cron": "0 2 * * SUN",
                       "model_override": "frontier",
                       "timeout_secs": 600,
                       "enabled": True,
