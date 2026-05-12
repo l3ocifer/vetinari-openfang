@@ -16,11 +16,18 @@ api_listen = "0.0.0.0:4200"
 # OpenFang resolves api_key_env at start; not specified here directly.
 
 # ─── Default model ───────────────────────────────────────────────────
-# Routes through LiteLLM at the cluster gateway. The OpenAI-compatible
-# provider matches LiteLLM's interface.
+# Fleet default — routes through LiteLLM at the cluster gateway. The
+# OpenAI-compatible provider matches LiteLLM's interface.
+#
+# `chat` is the fleet default everywhere (vllm-chat on thebeast / RTX 4090,
+# QuantTrio Qwen3.5-27B-AWQ-INT4, ~80 tok/s, 20 K input ctx). `long` and
+# `frontier` are opt-in per-task via `model_override` in schedules and
+# subagent specs — see homelab/k8s/schedules-job.yaml for the pinning
+# pattern (frontier for daily synthesis, chat for high-frequency dashboard
+# refresh, long for ad-hoc multi-graph reads).
 [default_model]
 provider = "openai_compatible"
-model = "chat"  # LiteLLM alias — currently qwen2.5-coder:32b via vllm-chat
+model = "chat"
 base_url = "http://litellm.inference.svc.cluster.local:4000/v1"
 api_key_env = "LITELLM_API_KEY"
 
@@ -84,19 +91,19 @@ listen = true  # Accept inbound A2A from siblings (e.g. handoff results)
 
   [[a2a.peers]]
   name = "frick"
-  agent_card_url = "http://frick.ironclaw.svc.cluster.local:8080/.well-known/agent.json"
+  agent_card_url = "http://frick.agents-shared.svc.cluster.local:3000/.well-known/agent.json"
   description = "IronClaw runtime, alef. Cluster + home automation."
   auth = { type = "hmac_sha256", shared_secret_env = "OFP_SHARED_SECRET" }
 
   [[a2a.peers]]
   name = "frack"
-  agent_card_url = "http://frack.frack.svc.cluster.local:18789/.well-known/agent.json"
+  agent_card_url = "http://frack.agents-shared.svc.cluster.local:18789/.well-known/agent.json"
   description = "OpenClaw runtime, thebeast. The 12 businesses + customer ops."
   auth = { type = "hmac_sha256", shared_secret_env = "OFP_SHARED_SECRET" }
 
   [[a2a.peers]]
   name = "sancho"
-  agent_card_url = "http://sancho.sancho.svc.cluster.local:3001/.well-known/agent.json"
+  agent_card_url = "http://sancho.agents-shared.svc.cluster.local:3001/.well-known/agent.json"
   description = "Hermes runtime, alef. Calendar / email / iMessage / personal life."
   auth = { type = "hmac_sha256", shared_secret_env = "OFP_SHARED_SECRET" }
 

@@ -187,8 +187,9 @@ Routed via LiteLLM at `http://litellm.inference.svc.cluster.local:4000/v1`:
 
 | OpenFang alias | Backend (today) | Use case |
 |---|---|---|
-| `default` | LiteLLM `chat` (qwen2.5-coder:32b on alef Ollama via vllm-chat) | Conversation, routing decisions, briefings |
-| `long` | LiteLLM `long` (falls through to chat) | Weekly system reviews, multi-day timelines |
+| `default` | LiteLLM `chat` (vllm-chat on thebeast / Qwen3.5 27B AWQ) | Conversation, routing decisions, hourly dashboard refresh, high-frequency subagent dispatch |
+| `long` | LiteLLM `long` (vllm-long on alef / Qwen3.5 9B AWQ + DeltaNet, 262 K ctx) | Multi-day timelines, big multi-graph reads when chat's 20 K is too tight |
+| `frontier` | LiteLLM `frontier` (Qwen3-Coder 480B MoE on blade, CPU-only, ~3-5 tok/s) | Daily synthesis pinned via `model_override` — state-of-the-union, strategic-outlook, weekly-system-review, cluster/security deep-dives |
 | `embed` | LiteLLM `embed` (tei-embed) | Memory embeddings for cross-graph search |
 
 Cloud fallback: Anthropic Claude Sonnet 4 via `ANTHROPIC_API_KEY`

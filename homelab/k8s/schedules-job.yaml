@@ -155,6 +155,62 @@ spec:
                           "Post a #homelab Matrix summary."
                       ),
                   },
+                  # ─── Sibling deep-dives (frontier-pinned, daily) ───
+                  # Frick (Ironclaw) and Vimes (Ironclaw) run their own
+                  # routines via LiteLLM `chat` (Ironclaw routines have
+                  # no per-routine model override). To give them a
+                  # daily frontier-quality synthesis pass we route
+                  # through Vetinari: Vetinari reads their graphs +
+                  # journals + recent k8s events and produces the deep
+                  # operational/security analysis they couldn't do
+                  # themselves on a 32B local model.
+                  {
+                      "name": "cluster-deep-dive",
+                      "cron": "30 5 * * *",
+                      "model_override": "frontier",
+                      "timeout_secs": 900,
+                      "enabled": True,
+                      "message": (
+                          "DAILY CLUSTER DEEP-DIVE (frontier model). "
+                          "Read Frick's recent journal "
+                          "(/data/graphs/frick/journals/$(date +%%Y_%%m_%%d).md and the prior day's), "
+                          "their pages/world/cluster-state.md, and pages/world/open-loops.md. "
+                          "Pull last 24h of cluster events: "
+                          "  kubectl get events -A --sort-by=.lastTimestamp | tail -200 "
+                          "  kubectl top nodes "
+                          "  kubectl top pods -A --sort-by=memory | head -30. "
+                          "Identify: (1) capacity trajectory (CPU/RAM/GPU 7-day trend if data present), "
+                          "(2) restart-loop or OOM patterns by namespace, "
+                          "(3) anything Frick logged as needing follow-up but didn't escalate. "
+                          "Write the synthesis to /data/graphs/leo/pages/world/cluster-state.md "
+                          "(overwrite) and post a 5-bullet summary to the homelab Matrix room. "
+                          "If a P1 emerges, append it to /data/graphs/leo/pages/world/open-loops.md."
+                      ),
+                  },
+                  {
+                      "name": "security-deep-dive",
+                      "cron": "45 5 * * *",
+                      "model_override": "frontier",
+                      "timeout_secs": 900,
+                      "enabled": True,
+                      "message": (
+                          "DAILY SECURITY DEEP-DIVE (frontier model). "
+                          "Read Vimes' recent journal "
+                          "(/data/graphs/vimes/journals/$(date +%%Y_%%m_%%d).md and the prior day's), "
+                          "their pages/world/threats.md and pages/world/audit-log.md. "
+                          "Pull last 24h of security signals: "
+                          "  kubectl logs -n traefik deploy/traefik --since=24h | grep -E '4[0-9][0-9]|5[0-9][0-9]' | tail -100 "
+                          "  kubectl logs -n authelia deploy/authelia --since=24h | grep -iE 'denied|fail|locked' | tail -50 "
+                          "  any vimes-flagged events from fleet_events (severity p0/p1 + kind LIKE 'security.%%'). "
+                          "Identify: (1) novel access patterns (new source IPs, new failed-auth clusters), "
+                          "(2) any privilege-escalation or KILLSWITCH-class events, "
+                          "(3) dependency CVEs Vimes has tracked. "
+                          "Write the synthesis to /data/graphs/leo/pages/world/security-posture.md "
+                          "(overwrite) and post a #homelab Matrix summary. "
+                          "P0/P1 findings get appended to /data/graphs/leo/pages/world/open-loops.md "
+                          "with a clear remediation."
+                      ),
+                  },
                   # ─── High-frequency loop (chat-pinned, dashboard builders) ───
                   {
                       "name": "sibling-pulse",
