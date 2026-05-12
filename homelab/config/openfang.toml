@@ -270,7 +270,7 @@ notify_on = ["P0", "P1"]
 
   [[cron.tasks]]
   name = "killswitch-drift-check"
-  schedule = "0 2 * * 0"  # Sunday 02:00 weekly
+  schedule = "0 2 * * 1"  # Sunday 02:00 weekly (OpenFang cron uses 1=Sunday)
   prompt = """
   Read each agent's running config (Frick: settings.json, Frack:
   openclaw.json, Sancho: hermes.toml). Compare each agent's
@@ -283,7 +283,7 @@ notify_on = ["P0", "P1"]
 
   [[cron.tasks]]
   name = "weekly-system-review"
-  schedule = "0 9 * * 0"  # Sunday 09:00 weekly
+  schedule = "0 9 * * 1"  # Sunday 09:00 weekly (OpenFang cron uses 1=Sunday)
   prompt = """
   Week-over-week review:
     - Heartbeat health per agent (frequency, missed beats)
