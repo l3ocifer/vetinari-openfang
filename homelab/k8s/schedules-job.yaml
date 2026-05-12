@@ -44,25 +44,29 @@ spec:
         - name: seed
           image: python:3.12-slim
           command: ["sh", "-c"]
+          env:
+            - name: OPENFANG_API_KEY
+              valueFrom:
+                secretKeyRef: { name: vetinari-secrets, key: A2A_BEARER_TOKEN }
           args:
             - |
               set -eu
               pip install --quiet --no-cache-dir 'httpx==0.28.*'
 
-              # The vetinari-headless Service routes to the openfang-api
-              # port on the running Vetinari pod. We don't have an
-              # auth token requirement on /api/schedules inside the
-              # cluster (Authelia gates the IngressRoute, not the Svc).
+              # The OpenFang API requires an API key for non-loopback
+              # requests, including in-cluster schedule seeding.
               cat > /tmp/seed.py <<'PY'
               import json, os, sys, time
               import httpx
               BASE = os.environ.get("VETINARI_API", "http://vetinari.agents-shared.svc.cluster.local:4200")
+              API_KEY = os.environ["OPENFANG_API_KEY"]
+              HEADERS = {"Authorization": f"Bearer {API_KEY}"}
 
               # Wait until /api/schedules answers (Vetinari may still be
               # rolling). 60-attempt budget at 5s each = 5min.
               for attempt in range(60):
                   try:
-                      r = httpx.get(f"{BASE}/api/schedules", timeout=5)
+                      r = httpx.get(f"{BASE}/api/schedules", headers=HEADERS, timeout=5)
                       r.raise_for_status()
                       schedules = r.json()["schedules"]
                       break
@@ -316,7 +320,7 @@ spec:
               for spec in DESIRED:
                   if spec["name"] in by_name:
                       old_id = by_name[spec["name"]]
-                      r = httpx.delete(f"{BASE}/api/schedules/{old_id}", timeout=10)
+                      r = httpx.delete(f"{BASE}/api/schedules/{old_id}", headers=HEADERS, timeout=10)
                       print(f"deleted old {spec['name']} ({old_id}): {r.status_code}", flush=True)
                   payload = {
                       "name": spec["name"],
@@ -327,12 +331,12 @@ spec:
                       "timeout_secs": spec["timeout_secs"],
                       "model_override": spec["model_override"],
                   }
-                  r = httpx.post(f"{BASE}/api/schedules", json=payload, timeout=10)
+                  r = httpx.post(f"{BASE}/api/schedules", headers=HEADERS, json=payload, timeout=10)
                   print(f"created {spec['name']}: {r.status_code} {r.text[:200]}", flush=True)
                   r.raise_for_status()
 
               print(f"\\nseeded {len(DESIRED)} schedules. final list:", flush=True)
-              for s in httpx.get(f"{BASE}/api/schedules", timeout=10).json()["schedules"]:
+              for s in httpx.get(f"{BASE}/api/schedules", headers=HEADERS, timeout=10).json()["schedules"]:
                   print(f"  {s['name']:25s} cron={s['cron']:14s} enabled={s['enabled']}", flush=True)
               PY
               exec python /tmp/seed.py

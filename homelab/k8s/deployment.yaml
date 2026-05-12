@@ -64,6 +64,9 @@ spec:
               value: "Vetinari"
             - name: AGENT_ID
               value: "vetinari"
+            - name: OPENFANG_API_KEY
+              valueFrom:
+                secretKeyRef: { name: vetinari-secrets, key: A2A_BEARER_TOKEN }
             - name: OPENFANG_HOME
               value: "/data/openfang"
             - name: OPENFANG_LISTEN
