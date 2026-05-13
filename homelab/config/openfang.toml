@@ -197,6 +197,9 @@ on_trigger = "graceful_exit"
 [heartbeat]
 enabled = true
 interval = "30m"
+# Kernel health checks use seconds, not the human interval above. Match
+# Vetinari's 30m cadence so normal idle time is not reported as unhealthy.
+default_timeout_secs = 1800
 offset_minutes = 5  # :05 and :35 — 5-min offsets vs each sibling
 checks = [
   "sibling_health",         # GET /health on each sibling's gateway URL
