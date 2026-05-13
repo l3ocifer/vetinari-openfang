@@ -4855,7 +4855,9 @@ impl OpenFangKernel {
                     break;
                 }
 
-                let statuses = check_agents(&kernel.registry, &config);
+                let statuses = check_agents(&kernel.registry, &config, |id| {
+                    kernel.running_tasks.contains_key(&id)
+                });
                 for status in &statuses {
                     let Some(entry) = kernel.registry.get(status.agent_id) else {
                         continue;

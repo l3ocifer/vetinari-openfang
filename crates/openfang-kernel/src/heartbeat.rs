@@ -1,9 +1,11 @@
 //! Heartbeat monitor — detects unresponsive agents for 24/7 autonomous operation.
 //!
 //! The heartbeat monitor runs as a background tokio task, periodically checking
-//! each running agent's `last_active` timestamp. If an agent hasn't been active
-//! for longer than 2x its heartbeat interval, a `HealthCheckFailed` event is
-//! published to the event bus.
+//! each running agent's `last_active` timestamp. Autonomous agents use a tight
+//! timeout derived from their heartbeat interval; **reactive** agents are exempt
+//! while idle (no turn in flight) — silence between user messages is healthy.
+//! When an agent is genuinely wedged mid-turn, `has_running_task` stays true and
+//! the timeout still applies.
 //!
 //! Crashed agents are tracked for auto-recovery: the heartbeat will attempt to
 //! reset crashed agents back to Running up to `max_recovery_attempts` times.
@@ -144,7 +146,14 @@ pub(crate) fn should_exempt_idle_reactive_agent(entry: &AgentEntry, is_running_t
 ///
 /// This is a pure function — it doesn't start a background task.
 /// The caller (kernel) can run this periodically or in a background task.
-pub fn check_agents(registry: &AgentRegistry, config: &HeartbeatConfig) -> Vec<HeartbeatStatus> {
+///
+/// *has_running_task* must return true while an agent turn is actively executing
+/// so reactive agents mid-LLM-call are not misclassified as idle.
+pub fn check_agents(
+    registry: &AgentRegistry,
+    config: &HeartbeatConfig,
+    has_running_task: impl Fn(AgentId) -> bool,
+) -> Vec<HeartbeatStatus> {
     let now = Utc::now();
     let mut statuses = Vec::new();
 
@@ -189,8 +198,15 @@ pub fn check_agents(registry: &AgentRegistry, config: &HeartbeatConfig) -> Vec<H
             continue;
         }
 
-        // Crashed agents are always considered unresponsive
-        let unresponsive = entry_ref.state == AgentState::Crashed || inactive_secs > timeout_secs;
+        let raw_unresponsive =
+            entry_ref.state == AgentState::Crashed || inactive_secs > timeout_secs;
+
+        // Reactive agents idle between messages — same exemption as the kernel's
+        // heartbeat monitor loop (prevents spamming "unresponsive" every interval).
+        let exempt_idle_reactive = entry_ref.state == AgentState::Running
+            && should_exempt_idle_reactive_agent(&entry_ref, has_running_task(entry_ref.id));
+
+        let unresponsive = raw_unresponsive && !exempt_idle_reactive;
 
         if unresponsive && entry_ref.state == AgentState::Running {
             warn!(
@@ -377,7 +393,7 @@ mod tests {
         registry.register(idle_agent).unwrap();
 
         let config = HeartbeatConfig::default(); // timeout = 180s
-        let statuses = check_agents(&registry, &config);
+        let statuses = check_agents(&registry, &config, |_| false);
 
         // The idle agent should be skipped entirely
         assert!(
@@ -398,6 +414,30 @@ mod tests {
 
         assert!(should_exempt_idle_reactive_agent(&agent, false));
         assert!(!should_exempt_idle_reactive_agent(&agent, true));
+    }
+
+    #[test]
+    fn test_reactive_agent_long_idle_not_marked_unresponsive() {
+        let registry = crate::registry::AgentRegistry::new();
+        let hour_ago = Utc::now() - Duration::seconds(3600);
+        let thirty_min_ago = Utc::now() - Duration::seconds(1800);
+        let mut agent = make_entry(
+            "reactive-quiet",
+            AgentState::Running,
+            hour_ago,
+            thirty_min_ago,
+        );
+        agent.manifest.schedule = ScheduleMode::Reactive;
+        registry.register(agent).unwrap();
+
+        let config = HeartbeatConfig::default();
+        let statuses = check_agents(&registry, &config, |_| false);
+
+        assert_eq!(statuses.len(), 1);
+        assert!(
+            !statuses[0].unresponsive,
+            "reactive agent idle between messages should not be marked unresponsive"
+        );
     }
 
     #[test]
@@ -422,16 +462,21 @@ mod tests {
         let registry = crate::registry::AgentRegistry::new();
         let ten_min_ago = Utc::now() - Duration::seconds(600);
         let five_min_ago = Utc::now() - Duration::seconds(300);
-        let active_agent = make_entry(
+        let mut active_agent = make_entry(
             "active-agent",
             AgentState::Running,
             ten_min_ago,
             five_min_ago,
         );
+        // Default schedule is Reactive — idle silence is healthy. Use periodic
+        // so this test exercises real timeout detection for non-reactive agents.
+        active_agent.manifest.schedule = ScheduleMode::Periodic {
+            cron: "0 * * * *".to_string(),
+        };
         registry.register(active_agent).unwrap();
 
         let config = HeartbeatConfig::default(); // timeout = 180s, inactive = ~300s
-        let statuses = check_agents(&registry, &config);
+        let statuses = check_agents(&registry, &config, |_| false);
 
         assert_eq!(statuses.len(), 1);
         assert!(
@@ -450,7 +495,7 @@ mod tests {
         registry.register(healthy_agent).unwrap();
 
         let config = HeartbeatConfig::default(); // timeout = 180s
-        let statuses = check_agents(&registry, &config);
+        let statuses = check_agents(&registry, &config, |_| false);
 
         assert_eq!(statuses.len(), 1);
         assert!(
@@ -474,7 +519,7 @@ mod tests {
         registry.register(crashed_agent).unwrap();
 
         let config = HeartbeatConfig::default();
-        let statuses = check_agents(&registry, &config);
+        let statuses = check_agents(&registry, &config, |_| false);
 
         assert_eq!(statuses.len(), 1);
         assert!(
