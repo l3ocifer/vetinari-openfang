@@ -93,11 +93,16 @@ spec:
                   {
                       "name": "state-of-the-union",
                       "cron": "0 22 * * *",
-                      "model_override": "frontier",
+                      # Claude Sonnet via the Max subscription. Bridge gates
+                      # against the household 7-window quota; falls back to
+                      # `chat-thebeast` then `frontier-blade` (LiteLLM map)
+                      # if Claude is throttled or refused. See homelab
+                      # argocd/apps/_inference/55-claude-bridge.yaml.
+                      "model_override": "claude-sonnet-max",
                       "timeout_secs": 600,
                       "enabled": True,
                       "message": (
-                          "DAILY SYNTHESIS (frontier model). "
+                          "DAILY SYNTHESIS (Claude Sonnet via Max subscription, falls back to local frontier on quota throttle). "
                           "Read /data/graphs/vetinari/pages/world/dashboard.md "
                           "(built every 15 min by sibling-pulse, fleet-events-tail, "
                           "open-loops-scan, bench-watch). "
@@ -110,11 +115,14 @@ spec:
                   {
                       "name": "strategic-outlook",
                       "cron": "15 6 * * *",
-                      "model_override": "frontier",
+                      # Claude Sonnet via Max — the morning brief is the
+                      # single most important output of the day, paid model
+                      # is justified.
+                      "model_override": "claude-sonnet-max",
                       "timeout_secs": 600,
                       "enabled": True,
                       "message": (
-                          "MORNING STRATEGIC OUTLOOK (frontier model). "
+                          "MORNING STRATEGIC OUTLOOK (Claude Sonnet via Max subscription, falls back to local frontier on quota throttle). "
                           "Read /data/graphs/vetinari/pages/world/dashboard.md and "
                           "/data/graphs/leo/pages/world/state-of-the-union.md (yesterday's snapshot). "
                           "Synthesize the next 24h across Sancho (personal), Frack (business ops), "
@@ -127,11 +135,15 @@ spec:
                   {
                       "name": "weekly-system-review",
                       "cron": "0 9 * * 1",
-                      "model_override": "frontier",
+                      # Claude Opus via Max — the only weekly Opus job in
+                      # the fleet. Burns ~1/4 of the household weekly opus
+                      # quota in one shot; bridge enforces the
+                      # seven_day_opus 0.85 hard ceiling so this self-limits.
+                      "model_override": "claude-opus-max",
                       "timeout_secs": 1200,
                       "enabled": True,
                       "message": (
-                          "WEEKLY SYSTEM REVIEW (frontier model, deepest pass). "
+                          "WEEKLY SYSTEM REVIEW (Claude Opus via Max subscription, deepest pass; falls back to local frontier on quota throttle). "
                           "Read all daily state-of-the-union snapshots from the past 7 days at "
                           "/data/graphs/leo/pages/world/state-of-the-union*.md (or "
                           "/data/graphs/vetinari/journals/ if archived). "
@@ -171,11 +183,16 @@ spec:
                   {
                       "name": "cluster-deep-dive",
                       "cron": "30 5 * * *",
-                      "model_override": "frontier",
+                      # Claude Sonnet via Max — the explicit purpose of this
+                      # job ("the deep operational analysis they couldn't do
+                      # themselves on a 32B local model") is exactly what
+                      # the paid model exists for. Falls back to local
+                      # `frontier` on Claude throttle.
+                      "model_override": "claude-sonnet-max",
                       "timeout_secs": 900,
                       "enabled": True,
                       "message": (
-                          "DAILY CLUSTER DEEP-DIVE (frontier model). "
+                          "DAILY CLUSTER DEEP-DIVE (Claude Sonnet via Max subscription; falls back to local frontier on quota throttle). "
                           "Read Frick's recent journal "
                           "(/data/graphs/frick/journals/$(date +%%Y_%%m_%%d).md and the prior day's), "
                           "their pages/world/cluster-state.md, and pages/world/open-loops.md. "
@@ -194,11 +211,14 @@ spec:
                   {
                       "name": "security-deep-dive",
                       "cron": "45 5 * * *",
-                      "model_override": "frontier",
+                      # Claude Sonnet via Max — security pattern detection
+                      # is materially better on Claude than on the local
+                      # 32B Qwen MoE. Falls back to local `frontier`.
+                      "model_override": "claude-sonnet-max",
                       "timeout_secs": 900,
                       "enabled": True,
                       "message": (
-                          "DAILY SECURITY DEEP-DIVE (frontier model). "
+                          "DAILY SECURITY DEEP-DIVE (Claude Sonnet via Max subscription; falls back to local frontier on quota throttle). "
                           "Read Vimes' recent journal "
                           "(/data/graphs/vimes/journals/$(date +%%Y_%%m_%%d).md and the prior day's), "
                           "their pages/world/threats.md and pages/world/audit-log.md. "
