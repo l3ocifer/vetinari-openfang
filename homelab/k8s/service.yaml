@@ -15,6 +15,10 @@ spec:
       port: 4200
       targetPort: api
       protocol: TCP
+    - name: a2a
+      port: 8443
+      targetPort: api
+      protocol: TCP
     - name: ofp
       port: 50051
       targetPort: ofp
