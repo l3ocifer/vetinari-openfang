@@ -12,12 +12,12 @@
 #
 # Build (from repo root):
 #   docker build -f homelab/Dockerfile \
-#     -t ghcr.io/l3ocifer/vetinari-openfang:latest \
-#     -t ghcr.io/l3ocifer/vetinari-openfang:$(git rev-parse --short HEAD) .
+#     -t git.leopaska.xyz/leo/vetinari-openfang:homelab \
+#     -t git.leopaska.xyz/leo/vetinari-openfang:$(git rev-parse --short HEAD) .
 #
-# CI/CD: GitHub Actions (homelab/.github/workflows/build.yml) runs
-# this build on every push to main and tags. ArgoCD Image Updater
-# (newest-build strategy) rolls Vetinari's Deployment automatically.
+# CI/CD: Forgejo Actions (.forgejo/workflows/homelab-build.yml) runs
+# this build on every push to main. ArgoCD Image Updater watches the
+# Forgejo registry digest and rolls Vetinari's Deployment automatically.
 
 # syntax=docker/dockerfile:1
 

@@ -37,9 +37,8 @@ vetinari-openfang/                   ← repo root (this fork)
     │                                   k8s/kustomization.yaml refs:
     │                                   ../shared/openclaw-configs/shared/{AGENTS,
     │                                   HANDOFF, KILLSWITCH, USER}.md
-    ├── .github/workflows/
-    │   ├── build.yml                 ← image build & push to GHCR
-    │   └── upstream-sync.yml         ← weekly auto-PR `git pull upstream`
+    ├── ../.forgejo/workflows/        ← primary homelab image build
+    ├── ../.github/workflows/         ← backup CI + manual GHCR fallback
     ├── PATCHES.md                    ← what we changed vs upstream and why
     ├── CHANGELOG.md                  ← releases of vetinari-openfang
     └── README.md                     ← this file
@@ -50,8 +49,8 @@ vetinari-openfang/                   ← repo root (this fork)
 ArgoCD's `vetinari` Application in
 [`l3ocifer/homelab/argocd/apps/agents.yaml`](https://github.com/l3ocifer/homelab/blob/main/argocd/apps/agents.yaml)
 points at this repo's `homelab/k8s` path. Push to `main` →
-GitHub Actions builds + pushes
-`ghcr.io/l3ocifer/vetinari-openfang:latest` → ArgoCD Image Updater
+Forgejo Actions builds + pushes
+`git.leopaska.xyz/leo/vetinari-openfang:homelab` → ArgoCD Image Updater
 rolls the Deployment.
 
 ## Building locally
@@ -60,8 +59,8 @@ rolls the Deployment.
 git clone --recurse-submodules git@github.com:l3ocifer/vetinari-openfang.git
 cd vetinari-openfang
 docker build -f homelab/Dockerfile \
-  -t ghcr.io/l3ocifer/vetinari-openfang:latest \
-  -t ghcr.io/l3ocifer/vetinari-openfang:$(git rev-parse --short HEAD) \
+  -t git.leopaska.xyz/leo/vetinari-openfang:homelab \
+  -t git.leopaska.xyz/leo/vetinari-openfang:$(git rev-parse --short HEAD) \
   .
 ```
 

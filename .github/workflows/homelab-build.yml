@@ -1,29 +1,8 @@
-name: Build & push image
+name: GitHub fallback - Build & push GHCR image
 
 on:
-  push:
-    branches: [main]
-    tags: ["v*"]
-    paths:
-      - "homelab/Dockerfile"
-      - "homelab/image/**"
-      # Trigger on upstream source changes too — the homelab/ workflow
-      # picks up new framework features automatically once the
-      # upstream-sync.yml PR merges.
-      - "Cargo.toml"
-      - "Cargo.lock"
-      - "crates/**"
-      - "agents/**"
-      - "hands/**"
-      - "scripts/**"
-  pull_request:
-    paths:
-      - "homelab/Dockerfile"
-      - "homelab/image/**"
-      - "Cargo.toml"
-      - "Cargo.lock"
-      - "crates/**"
-      - "agents/**"
+  # Forgejo is the primary CI/image path for homelab. Keep GHCR as an
+  # emergency fallback without rebuilding on every Forgejo mirror push.
   workflow_dispatch: {}
 
 permissions:
