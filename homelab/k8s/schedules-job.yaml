@@ -238,7 +238,13 @@ spec:
                   # ─── High-frequency loop (chat-pinned, dashboard builders) ───
                   {
                       "name": "sibling-pulse",
-                      "cron": "*/15 * * * *",
+                      # 2026-05-15: dropped from */15 to */30. Sibling cron jobs
+                      # mostly run at intervals of 30min+ (Sancho heartbeat 30m,
+                      # Quirm bench-pulse */30, Frick/Vimes routines hourly), so
+                      # a 15min pulse re-read the same journal lines twice with
+                      # no new signal. */30 halves the chat-lane load (-48
+                      # calls/day) while keeping dashboard staleness under 30m.
+                      "cron": "*/30 * * * *",
                       "model_override": "chat",
                       "timeout_secs": 90,
                       "enabled": True,
