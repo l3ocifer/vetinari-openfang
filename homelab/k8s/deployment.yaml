@@ -53,7 +53,7 @@ spec:
         fsGroup: 1000
       containers:
         - name: openfang
-          image: ghcr.io/l3ocifer/vetinari-openfang:homelab
+          image: git.leopaska.xyz/leo/vetinari-openfang:homelab
           imagePullPolicy: Always
           command: ["openfang"]
           args:
@@ -170,4 +170,4 @@ spec:
         - { name: graph-puck,       persistentVolumeClaim: { claimName: puck-graph } }
         - { name: graph-leo,        persistentVolumeClaim: { claimName: leo-graph } }
       imagePullSecrets:
-        - name: ghcr-credentials
+        - name: forgejo-registry-credentials
