@@ -1,0 +1,28 @@
+# Baseline of pre-existing findings, generated 2026-05-15T06:37:23Z.
+# Format: <file>:<rule>:<line> (gitleaks dir-mode fingerprints).
+# New findings outside this list will fail the secret-scan workflow.
+# Triage entries by removing them once the underlying file is rotated/cleaned.
+crates/openfang-cli/src/main.rs:generic-api-key:1457
+crates/openfang-cli/src/main.rs:generic-api-key:1463
+crates/openfang-runtime/src/drivers/mod.rs:generic-api-key:908
+crates/openfang-runtime/src/drivers/mod.rs:generic-api-key:943
+crates/openfang-runtime/src/llm_errors.rs:generic-api-key:827
+crates/openfang-runtime/src/llm_errors.rs:generic-api-key:869
+docs/channel-adapters.md:generic-api-key:332
+docs/troubleshooting.md:curl-auth-header:434
+homelab/shared/archive/ollama-2026-04/ollama-proxy-complete-setup.md:curl-auth-header:200
+homelab/shared/archive/ollama-2026-04/ollama-proxy-complete-setup.md:curl-auth-header:272
+homelab/shared/archive/ollama-2026-04/ollama-proxy-complete-setup.md:curl-auth-header:276
+homelab/shared/docs/forest-orbs-firmware.md:generic-api-key:617
+homelab/shared/infrastructure/shared-secrets/README.md:generic-api-key:24
+homelab/shared/infrastructure/shared-secrets/README.md:generic-api-key:25
+homelab/shared/infrastructure/shared-secrets/stripe-sealed.yaml:generic-api-key:10
+homelab/shared/infrastructure/shared-secrets/stripe-sealed.yaml:generic-api-key:11
+target/debug/deps/libed25519_dalek-02e0ac0ffca99fef.rmeta:private-key:39
+target/debug/deps/libed25519_dalek-92ebfab8351d0852.rmeta:private-key:39
+target/debug/deps/libed25519_dalek-b5f88af0d6ec2d6e.rmeta:private-key:70
+target/debug/deps/libed25519_dalek-c691c493391a6a75.rmeta:private-key:70
+target/debug/deps/libglobal_hotkey-3f835bbe4d9712b1.rmeta:generic-api-key:158
+target/debug/deps/libglobal_hotkey-5dae590a57fe51cc.rmeta:generic-api-key:346
+target/debug/deps/libmuda-7f1617d1cdc4ade8.rmeta:generic-api-key:580
+target/debug/deps/libmuda-9c37efc84ac4149a.rmeta:generic-api-key:2209
