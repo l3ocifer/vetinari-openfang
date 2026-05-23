@@ -39,7 +39,7 @@ cron = "0.16"
 zeroize = { workspace = true }
 
 [target.'cfg(unix)'.dependencies]
-libc = "0.2"
+libc = "0.2.186"
 
 [dev-dependencies]
 tokio-test = { workspace = true }
