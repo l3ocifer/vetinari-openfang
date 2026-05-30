@@ -9149,6 +9149,16 @@ fn cron_job_to_schedule_view(
         CronAction::SystemEvent { text } => text.clone(),
         CronAction::WorkflowRun { workflow_id, .. } => format!("workflow:{workflow_id}"),
     };
+    // Surface per-schedule routing/budget so operators (and the seed
+    // round-trip read-back) can verify they persisted.
+    let (model_override, timeout_secs) = match &job.action {
+        CronAction::AgentTurn {
+            model_override,
+            timeout_secs,
+            ..
+        } => (model_override.clone(), *timeout_secs),
+        _ => (None, None),
+    };
     let meta = kernel.cron_scheduler.get_meta(job.id);
     let last_status = meta.as_ref().and_then(|m| m.last_status.clone());
     // Serialize delivery_targets so dashboard chips/editor round-trip cleanly.
@@ -9167,6 +9177,8 @@ fn cron_job_to_schedule_view(
         "next_run": job.next_run.map(|t| t.to_rfc3339()),
         "last_status": last_status,
         "delivery_targets": delivery_targets,
+        "model_override": model_override,
+        "timeout_secs": timeout_secs,
     })
 }
 
@@ -9256,6 +9268,19 @@ pub async fn create_schedule(
         message.clone()
     };
 
+    // Per-schedule LLM routing + execution budget. These were previously
+    // hardcoded to null, silently dropping the seed payload's values so every
+    // job ran on the agent default model and the kernel's 120s default
+    // timeout (kernel.rs `timeout_secs.unwrap_or(120)`). Synthesis jobs that
+    // legitimately need a longer budget then timed out and auto-disabled after
+    // 5 consecutive errors. Honor both fields when supplied.
+    let model_override = req
+        .get("model_override")
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.is_empty())
+        .map(String::from);
+    let timeout_secs = req.get("timeout_secs").and_then(|v| v.as_u64());
+
     // Accept multi-destination delivery targets. Validate each entry matches
     // the `CronDeliveryTarget` shape up front so we return a 400 rather than
     // silently dropping targets or failing later in the kernel.
@@ -9292,8 +9317,8 @@ pub async fn create_schedule(
         "action": {
             "kind": "agent_turn",
             "message": job_message,
-            "model_override": null,
-            "timeout_secs": null,
+            "model_override": model_override,
+            "timeout_secs": timeout_secs,
         },
         "delivery": { "kind": "none" },
         "one_shot": false,

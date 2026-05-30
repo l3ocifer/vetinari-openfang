@@ -32,8 +32,12 @@ const MAX_TURN_MESSAGE_LEN: usize = 16_384;
 /// Minimum timeout for AgentTurn (seconds).
 const MIN_TIMEOUT_SECS: u64 = 10;
 
-/// Maximum timeout for AgentTurn (seconds).
-const MAX_TIMEOUT_SECS: u64 = 600;
+/// Maximum timeout for AgentTurn (seconds). Raised from 600 to 1800 so that
+/// daily/weekly synthesis schedules running on the slow local `frontier` MoE
+/// (p95 ~40s/call, multi-step) get a realistic budget. The old 600 cap
+/// silently rejected the seed's 900s/1200s synthesis jobs once per-schedule
+/// `timeout_secs` was actually honored.
+const MAX_TIMEOUT_SECS: u64 = 1800;
 
 /// Maximum webhook URL length.
 const MAX_WEBHOOK_URL_LEN: usize = 2048;
@@ -744,7 +748,7 @@ mod tests {
         job.action = CronAction::AgentTurn {
             message: "hello".into(),
             model_override: None,
-            timeout_secs: Some(601),
+            timeout_secs: Some(1801),
         };
         let err = job.validate(0).unwrap_err();
         assert!(err.contains("too large"), "{err}");
@@ -763,7 +767,7 @@ mod tests {
         job.action = CronAction::AgentTurn {
             message: "hello".into(),
             model_override: None,
-            timeout_secs: Some(600),
+            timeout_secs: Some(1800),
         };
         assert!(job.validate(0).is_ok());
     }

@@ -1346,6 +1346,64 @@ async fn test_schedules_delivery_targets_roundtrip() {
         .await;
 }
 
+/// POST /api/schedules with `model_override` + `timeout_secs` must persist
+/// them on the created AgentTurn action and return them on GET. Regression
+/// for the bug where `create_schedule` hardcoded both fields to null, forcing
+/// every job onto the agent default model + the kernel's 120s default timeout
+/// (which auto-disabled long synthesis jobs after 5 consecutive timeouts).
+#[tokio::test]
+async fn test_schedules_model_override_and_timeout_roundtrip() {
+    let server = start_test_server().await;
+    let client = reqwest::Client::new();
+    let agent_id = spawn_test_agent(&server).await;
+
+    let resp = client
+        .post(format!("{}/api/schedules", server.base_url))
+        .json(&serde_json::json!({
+            "name": "synthesis-roundtrip-test",
+            "cron": "0 6 * * *",
+            "agent_id": agent_id,
+            "message": "Synthesize the daily fleet digest.",
+            "enabled": true,
+            "model_override": "frontier",
+            "timeout_secs": 1200,
+        }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 201);
+    let body: serde_json::Value = resp.json().await.unwrap();
+    let sched_id = body["id"].as_str().expect("created schedule id").to_string();
+    assert_eq!(
+        body["model_override"], "frontier",
+        "model_override must persist on create response"
+    );
+    assert_eq!(
+        body["timeout_secs"], 1200,
+        "timeout_secs must persist on create response"
+    );
+
+    let resp = client
+        .get(format!("{}/api/schedules", server.base_url))
+        .send()
+        .await
+        .unwrap();
+    let body: serde_json::Value = resp.json().await.unwrap();
+    let created = body["schedules"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|s| s["id"] == sched_id)
+        .expect("created schedule must appear in list");
+    assert_eq!(created["model_override"], "frontier");
+    assert_eq!(created["timeout_secs"], 1200);
+
+    let _ = client
+        .delete(format!("{}/api/schedules/{}", server.base_url, sched_id))
+        .send()
+        .await;
+}
+
 /// PUT /api/schedules/{id} with `delivery_targets` should fully replace the
 /// target list.
 #[tokio::test]
