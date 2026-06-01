@@ -1793,6 +1793,7 @@ List all cron jobs. Optionally filter by agent with `?agent_id=<uuid>`.
       "action": {
         "kind": "agent_turn",
         "message": "Generate the daily report",
+        "model_override": "chat",
         "timeout_secs": 120
       },
       "delivery": {
@@ -1823,6 +1824,7 @@ Create a new cron job.
   "action": {
     "kind": "agent_turn",
     "message": "Generate the daily report",
+    "model_override": "chat",
     "timeout_secs": 120
   },
   "delivery": {
@@ -1832,6 +1834,14 @@ Create a new cron job.
   }
 }
 ```
+
+`agent_turn` action fields:
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `message` | string | *required* | Prompt delivered to the agent on each run. |
+| `model_override` | string \| null | `null` | Model alias to run this job on (e.g. `chat`, `frontier`, `claude-sonnet-max`). Omit/`null` uses the agent's default model. Both `model_override` and `timeout_secs` are persisted and round-tripped on read. |
+| `timeout_secs` | integer \| null | `null` | Wall-clock budget for the run. Capped at `1800`. Size this to the job's full agentic tool-loop (DB queries, multiple tool calls, file writes), not single-call latency — too-tight budgets cause `timed out after Ns` errors that auto-disable the schedule after 5 consecutive strikes. |
 
 **Response** `201 Created`:
 
@@ -1884,6 +1894,7 @@ Get job metadata including last run time, status, and error history.
     "action": {
       "kind": "agent_turn",
       "message": "Generate the daily report",
+      "model_override": "chat",
       "timeout_secs": 120
     },
     "delivery": { "kind": "none" },
