@@ -19,9 +19,12 @@
 #   kanban-tick          hourly      age open-loops, escalate stale
 #   drift-detect         every  2h  compare current vs last snapshot
 #
-# All run with model_override="chat" (cheap, 32k window) and
-# timeout_secs=90. Re-running the Job is safe: it deletes any
-# schedule with a matching name first, then re-creates from this list.
+# All run with model_override="chat" (cheap, 32k window). Per-job
+# timeout_secs are sized to the agentic tool-loop length (150-300s),
+# not the per-call latency — the original flat 60-90s budgets caused
+# repeated "timed out after 60s" auto-disables (2026-05-31). Re-running
+# the Job is safe: it deletes any schedule with a matching name first,
+# then re-creates from this list.
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -246,7 +249,9 @@ spec:
                       # calls/day) while keeping dashboard staleness under 30m.
                       "cron": "*/30 * * * *",
                       "model_override": "chat",
-                      "timeout_secs": 90,
+                      # 2026-05-31: 6 siblings × (log tail + journal read) +
+                      # dashboard append is ~12+ agentic steps; 90s starved it.
+                      "timeout_secs": 300,
                       "enabled": True,
                       "message": (
                           "QUICK TASK (≤30s, no canonical-context reload). "
@@ -263,7 +268,13 @@ spec:
                       "name": "fleet-events-tail",
                       "cron": "*/5 * * * *",
                       "model_override": "chat",
-                      "timeout_secs": 60,
+                      # 2026-05-31: 60s was too tight for the agentic loop
+                      # (DB connect + query + conditional Matrix + file append
+                      # across several `chat` round-trips). bench-watch logged
+                      # "timed out after 60s" and auto-disabled. The `chat`
+                      # model itself is fast (~0.2s/call); the cost is the
+                      # multi-step tool loop, so give it real headroom.
+                      "timeout_secs": 150,
                       "enabled": True,
                       "message": (
                           "QUICK TASK (≤20s). Connect to FLEET_DATABASE_URL and run: "
@@ -280,7 +291,8 @@ spec:
                       "name": "open-loops-scan",
                       "cron": "*/30 * * * *",
                       "model_override": "chat",
-                      "timeout_secs": 90,
+                      # 2026-05-31: 6 open-loops file reads + 7-line table build.
+                      "timeout_secs": 240,
                       "enabled": True,
                       "message": (
                           "QUICK TASK. Read /data/graphs/$AGENT/pages/world/open-loops.md for each "
@@ -295,7 +307,9 @@ spec:
                       "name": "bench-watch",
                       "cron": "*/30 * * * *",
                       "model_override": "chat",
-                      "timeout_secs": 60,
+                      # 2026-05-31: cross-DB \connect + 2 queries + file update
+                      # + conditional Matrix DM exceeded 60s; bumped to 180s.
+                      "timeout_secs": 180,
                       "enabled": True,
                       "message": (
                           "QUICK TASK. Reach Quirm's hermes_quirm DB via FLEET_DATABASE_URL "
@@ -312,7 +326,8 @@ spec:
                       "name": "kanban-tick",
                       "cron": "0 * * * *",
                       "model_override": "chat",
-                      "timeout_secs": 90,
+                      # 2026-05-31: open-loops parse + per-item staleness tagging.
+                      "timeout_secs": 180,
                       "enabled": True,
                       "message": (
                           "Hourly kanban tick. Read /data/graphs/leo/pages/world/open-loops.md. "
@@ -326,7 +341,8 @@ spec:
                       "name": "drift-detect",
                       "cron": "0 */2 * * *",
                       "model_override": "chat",
-                      "timeout_secs": 120,
+                      # 2026-05-31: dashboard-vs-snapshot diff + conditional trigger.
+                      "timeout_secs": 240,
                       "enabled": True,
                       "message": (
                           "Drift detection. Compare /data/graphs/vetinari/pages/world/dashboard.md "
