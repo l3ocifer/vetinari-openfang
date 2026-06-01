@@ -14,10 +14,16 @@
 #
 #   sibling-pulse        every 15m  who-did-what-recently per agent
 #   fleet-events-tail    every  5m  surface P0/P1 fleet_events
-#   open-loops-scan      every 30m  read each agent's open-loops.md
+#   open-loops-scan      every 30m  open-loops table + mission stall-chase + leo aging
 #   bench-watch          every 30m  poll Quirm bench.findings unseen
-#   kanban-tick          hourly      age open-loops, escalate stale
+#   kanban-tick          hourly      mission orchestrator: dispatch TODO->DOING
+#                                    via agent-bus, reconcile DOING->DONE
 #   drift-detect         every  2h  compare current vs last snapshot
+#
+# Mission board: /data/graphs/vetinari/pages/missions.md (canonical seed copy
+# at homelab/k8s/missions-board.md). Seeded once; thereafter Vetinari owns the
+# block states. kanban-tick dispatches + reconciles; open-loops-scan chases
+# stalls. See homelab/openclaw-configs/shared/skills/a2a-task-routing.
 #
 # All run with model_override="chat" (cheap, 32k window). Per-job
 # timeout_secs are sized to the agentic tool-loop length (150-300s),
@@ -291,16 +297,31 @@ spec:
                       "name": "open-loops-scan",
                       "cron": "*/30 * * * *",
                       "model_override": "chat",
-                      # 2026-05-31: 6 open-loops file reads + 7-line table build.
-                      "timeout_secs": 240,
+                      # 2026-06-01: now also chases stalled missions and ages
+                      # leo's open-loops (moved here from the old kanban-tick,
+                      # which became the mission dispatcher). 360s for the extra
+                      # mission-board read + staleness pass.
+                      "timeout_secs": 360,
                       "enabled": True,
                       "message": (
-                          "QUICK TASK. Read /data/graphs/$AGENT/pages/world/open-loops.md for each "
+                          "QUICK SCAN — three passes, no synthesis or recommendations:\n"
+                          "1) OPEN-LOOPS TABLE. Read /data/graphs/$AGENT/pages/world/open-loops.md for each "
                           "of frick, frack, sancho, quirm, vimes, puck. Count items, find any tagged "
-                          "[p0] or [p1] created in the last hour. "
-                          "Update /data/graphs/vetinari/pages/world/dashboard.md ## Open-loops section "
-                          "with a 7-line table (Agent | Total | P0 | P1 | Oldest). "
-                          "Do NOT synthesize, do NOT recommend. The daily strategic-outlook job does that."
+                          "[p0] or [p1] created in the last hour. Update "
+                          "/data/graphs/vetinari/pages/world/dashboard.md ## Open-loops section with a "
+                          "7-line table (Agent | Total | P0 | P1 | Oldest).\n"
+                          "2) MISSION STALL-CHASE. Read /data/graphs/vetinari/pages/missions.md. For each "
+                          "block with marker DOING, read its `dispatched::` timestamp. If dispatched > 24h "
+                          "ago and there is still no closure (no `completed::` property, no non-empty "
+                          "`deliverable` file), it is STALLED. Append a `stalled:: <UTC ISO-8601>` property "
+                          "to that block (idempotent — only add if absent) and add a row to the "
+                          "## Missions section of dashboard.md (task-id | agent | priority | age-hours). "
+                          "For any P0 mission stalled > 48h, send one Matrix DM to Leo naming the task-id. "
+                          "Do not re-dispatch (kanban-tick owns dispatch); only flag.\n"
+                          "3) OPEN-LOOPS AGING. In /data/graphs/leo/pages/world/open-loops.md, for each item "
+                          "parse the first-line/front-matter `opened:` date. If opened > 3 days ago and "
+                          "`closed:` is absent, tag it `[stale]`. If opened > 7 days, also send a Matrix DM "
+                          "to Leo naming the item. Never delete or close anything — Leo decides."
                       ),
                   },
                   {
@@ -326,15 +347,40 @@ spec:
                       "name": "kanban-tick",
                       "cron": "0 * * * *",
                       "model_override": "chat",
-                      # 2026-05-31: open-loops parse + per-item staleness tagging.
-                      "timeout_secs": 180,
+                      # 2026-06-01: repurposed from open-loops aging into the
+                      # mission orchestrator. Reads the mission board, dispatches
+                      # TODO->DOING via the agent-bus, reconciles DOING->DONE from
+                      # fleet_events + deliverables. ~6 missions x (bus POST + DB
+                      # check + block edit) is a deep agentic loop; 360s headroom.
+                      "timeout_secs": 360,
                       "enabled": True,
                       "message": (
-                          "Hourly kanban tick. Read /data/graphs/leo/pages/world/open-loops.md. "
-                          "For each item: parse the YAML front-matter (or first-line metadata) for "
-                          "`opened:` date. If opened > 3 days ago and `closed:` is absent, mark "
-                          "with `[stale]` tag. If opened > 7 days, also send a Matrix DM to Leo "
-                          "naming the item. Do not delete or close anything — Leo decides."
+                          "HOURLY MISSION ORCHESTRATION. You own /data/graphs/vetinari/pages/missions.md. "
+                          "Read it. It holds one block per standing mission with a marker "
+                          "(TODO|DOING|DONE) and properties: `assigned`, `task-id`, `priority`, "
+                          "`deliverable`, `acceptance`, `notes`. Process every mission block:\n"
+                          "1) DISPATCH — if the marker is TODO, hand the work to the assigned agent via the bus:\n"
+                          "   curl -fsS -X POST http://agent-bus.agents-shared.svc.cluster.local:8080/agent/<assigned>/a2a "
+                          "-H 'Content-Type: application/json' -d '{\"source_agent\":\"vetinari\","
+                          "\"target_agent\":\"<assigned>\",\"task_id\":\"<task-id>\",\"task_type\":\"implement\","
+                          "\"priority\":\"<priority>\",\"goal\":\"<the mission title verbatim>\","
+                          "\"context\":{\"background\":\"<notes>\",\"deliverables\":[\"<deliverable>\"],"
+                          "\"constraints\":[\"acceptance: <acceptance>\"]},\"timestamp\":\"<UTC ISO-8601>\"}'\n"
+                          "   On HTTP 2xx, rewrite that block's marker TODO->DOING and append a "
+                          "`dispatched:: <UTC ISO-8601>` property. The task-id is the stable A2A "
+                          "correlation key — send it verbatim, never invent or mutate it. Dispatch is "
+                          "idempotent: only TODO blocks are dispatched, so a re-run never double-sends.\n"
+                          "2) RECONCILE — if the marker is DOING, the work may be finished. Mark it DONE if EITHER:\n"
+                          "   (a) fleet_events has a closure: connect to FLEET_DATABASE_URL and run "
+                          "`SELECT 1 FROM fleet_events WHERE kind='handoff.completed' "
+                          "AND payload->>'task_id' = '<task-id>' LIMIT 1;` returns a row, OR\n"
+                          "   (b) the `deliverable` file exists and is non-empty.\n"
+                          "   If DONE, rewrite the marker DOING->DONE, append `completed:: <UTC ISO-8601>`, "
+                          "and post one line to the homelab Matrix room: `mission <task-id> complete — <agent>`.\n"
+                          "NEVER delete a block, never rewrite task-id/assigned, never touch DONE blocks. "
+                          "Only flip markers and append the dispatched/completed properties. "
+                          "If the bus returns a transport error, retry once after 5s; if it still fails, "
+                          "leave the block TODO and append `dispatch-error:: <UTC ISO-8601> <status>`."
                       ),
                   },
                   {
