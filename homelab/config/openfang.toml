@@ -31,6 +31,16 @@ model = "chat"
 base_url = "http://litellm.inference.svc.cluster.local:4000/v1"
 api_key_env = "LITELLM_API_KEY"
 
+# ─── Provider URL overrides ──────────────────────────────────────────
+# The embedding driver below selects the "ollama" provider (OpenAI-
+# compatible, key optional in the driver); this override points it at
+# the cluster LiteLLM gateway instead of the provider's localhost:11434
+# default (no Ollama runs in the pod — FU-7). The driver appends /v1.
+# Nothing else in this config uses the "ollama" provider, so the
+# override cannot leak into the chat-model catalog.
+[provider_urls]
+ollama = "http://litellm.inference.svc.cluster.local:4000"
+
 # ─── Memory ──────────────────────────────────────────────────────────
 [memory]
 # OpenFang's local SQLite session DB lives in /data/openfang/openfang.db
@@ -39,6 +49,14 @@ api_key_env = "LITELLM_API_KEY"
 sqlite_path = "/data/openfang/openfang.db"
 # Confidence decay rate for old memories — same default as upstream.
 decay_rate = 0.05
+# Embedding backend — flat fields on [memory] are the schema the kernel
+# actually reads (MemoryConfig.embedding_*). The previous nested
+# [memory.embeddings] table was silently ignored, which made the kernel
+# auto-detect "ollama @ localhost:11434" and fail every recall/remember
+# (falling back to text search). Routed via [provider_urls].ollama above.
+embedding_provider = "ollama"
+embedding_model = "embed"               # LiteLLM alias → cluster TEI, 1024-dim
+embedding_api_key_env = "LITELLM_API_KEY"
 
   # ─── Postgres canonical store ──────────────────────────────────────
   # Cross-session vector memory + audit-chain mirror. URL sealed in
@@ -61,13 +79,6 @@ decay_rate = 0.05
     { name = "sancho", path = "/data/graphs/sancho", access = "r" },
   ]
   block_attribution = { agent = "vetinari", auto = true }
-
-  [memory.embeddings]
-  provider = "openai_compatible"
-  base_url = "http://litellm.inference.svc.cluster.local:4000/v1"
-  api_key_env = "LITELLM_API_KEY"
-  model = "embed"
-  dim = 1024
 
   [memory.search]
   hybrid = true
