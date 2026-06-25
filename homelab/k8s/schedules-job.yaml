@@ -383,6 +383,37 @@ spec:
                           "state-of-the-union run via POST /api/schedules/state-of-the-union/trigger."
                       ),
                   },
+                  # ─── Daily maintenance passes (chat-pinned) ───
+                  # Previously created out-of-band with no model_override /
+                  # timeout_secs (the API then ran them on runtime defaults).
+                  # Pinned here to `chat` per the derived scheduling-policy
+                  # (default to chat; LiteLLM auto-falls-back chat→long if a
+                  # cross-agent journal sweep overflows the 24K window) with
+                  # tool-loop-sized timeouts, so the GitOps seed is the single
+                  # source of truth for every live schedule.
+                  {
+                      "name": "memory-consolidate",
+                      "cron": "15 4 * * *",
+                      "model_override": "chat",
+                      "timeout_secs": 300,
+                      "enabled": True,
+                      "message": (
+                          "Run memory consolidation on yesterday journals across all agents; "
+                          "distill cross-agent decisions and coordination patterns into "
+                          "Vetinari memory pages."
+                      ),
+                  },
+                  {
+                      "name": "open-loops-triage",
+                      "cron": "30 17 * * *",
+                      "model_override": "chat",
+                      "timeout_secs": 240,
+                      "enabled": True,
+                      "message": (
+                          "Read pages/world/open-loops.md. Archive completed items, flag stale "
+                          "items, propose reassignments, and summarize any reassignments."
+                      ),
+                  },
               ]
 
               # Index existing by name for idempotent upsert.
