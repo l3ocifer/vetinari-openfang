@@ -51,6 +51,30 @@ spec:
         runAsUser: 1000
         runAsGroup: 1000
         fsGroup: 1000
+      initContainers:
+        # Seed pages/world writable by the openfang user (uid 1000).
+        # The deterministic mission-orchestrator + bench-synthesis CronJobs run
+        # as root and create /data/graphs/vetinari/pages/world as root:root 755,
+        # which blocks the agent's OWN file_write (openfang 0.6.10 honors
+        # [capabilities].file_roots + auto_approve_autonomous) from persisting
+        # synthesis deliverables to its graph — proven live: the agent uid 1000
+        # got "Permission denied" on world/. chown to 1000 so autonomous turns
+        # can write world/<deliverable>.md; root cronjobs still write (root
+        # bypasses perms). Idempotent; mirrors the IronClaw seed-graph-dir init.
+        - name: seed-graph-world
+          image: git.leopaska.xyz/leo/alpine:3.20
+          imagePullPolicy: IfNotPresent
+          command: ["sh", "-c"]
+          args:
+            - |
+              mkdir -p /data/graphs/vetinari/pages/world
+              chown -R 1000:1000 /data/graphs/vetinari/pages/world
+              chmod -R u+rwX,g+rwX /data/graphs/vetinari/pages/world
+          securityContext:
+            runAsUser: 0
+            runAsGroup: 0
+          volumeMounts:
+            - { name: graph-vetinari, mountPath: /data/graphs/vetinari }
       containers:
         - name: openfang
           image: git.leopaska.xyz/leo/vetinari-openfang:homelab
