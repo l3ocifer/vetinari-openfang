@@ -204,6 +204,21 @@ sentinel_path = "/data/HARDSTOP-VETINARI"
 poll_interval_seconds = 30
 on_trigger = "graceful_exit"
 
+# ─── Approval policy ─────────────────────────────────────────────────
+[approval]
+# Vetinari runs unattended (cron + heartbeat, no human at the console).
+# The default policy gates shell_exec behind a human approval prompt that
+# can never be answered under cron — so it times out and silently denies
+# every gated tool call. This agent is declared [autonomous] and its reach
+# is already constrained by the tools + shell allowlists in agent.toml, so
+# auto-approve tool execution on autonomous turns. The runtime still
+# enforces the per-tool capability filter, the shell allowlist, the
+# exec-policy, the file_roots sandbox, and the subprocess metacharacter
+# guard — this only removes the human-in-the-loop gate that cannot be
+# satisfied without an operator present. Honored only when the agent
+# manifest has an [autonomous] section (Vetinari does).
+auto_approve_autonomous = true
+
 # ─── Heartbeat ───────────────────────────────────────────────────────
 [heartbeat]
 enabled = true

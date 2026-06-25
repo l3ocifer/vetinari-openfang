@@ -124,7 +124,11 @@ pub async fn execute_tool(
     tts_engine: Option<&crate::tts::TtsEngine>,
     docker_config: Option<&openfang_types::config::DockerSandboxConfig>,
     process_manager: Option<&crate::process_manager::ProcessManager>,
+    extra_file_roots: Option<&[PathBuf]>,
 ) -> ToolResult {
+    // Additional filesystem roots the file tools may access beyond the workspace
+    // (from the agent manifest's [capabilities].file_roots). Empty = workspace only.
+    let extra_file_roots: &[PathBuf] = extra_file_roots.unwrap_or(&[]);
     // Normalize the tool name through compat mappings so LLM-hallucinated aliases
     // (e.g. "fs-write" → "file_write") resolve to the canonical OpenFang name.
     let tool_name = normalize_tool_name(tool_name);
@@ -202,11 +206,13 @@ pub async fn execute_tool(
     debug!(tool_name, "Executing tool");
     let result = match tool_name {
         // Filesystem tools
-        "file_read" => tool_file_read(input, workspace_root).await,
-        "file_write" => tool_file_write(input, workspace_root).await,
-        "file_list" => tool_file_list(input, workspace_root).await,
-        "create_directory" => tool_create_directory(input, workspace_root).await,
-        "apply_patch" => tool_apply_patch(input, workspace_root).await,
+        "file_read" => tool_file_read(input, workspace_root, extra_file_roots).await,
+        "file_write" => tool_file_write(input, workspace_root, extra_file_roots).await,
+        "file_list" => tool_file_list(input, workspace_root, extra_file_roots).await,
+        "create_directory" => {
+            tool_create_directory(input, workspace_root, extra_file_roots).await
+        }
+        "apply_patch" => tool_apply_patch(input, workspace_root, extra_file_roots).await,
 
         // Web tools (upgraded: multi-provider search, SSRF-protected fetch)
         "web_fetch" => {
@@ -1368,8 +1374,19 @@ fn validate_path(path: &str) -> Result<&str, String> {
 
 /// Resolve a file path through the workspace sandbox (if available) or legacy validation.
 fn resolve_file_path(raw_path: &str, workspace_root: Option<&Path>) -> Result<PathBuf, String> {
+    resolve_file_path_multi(raw_path, workspace_root, &[])
+}
+
+/// Resolve a file path through the workspace sandbox extended with additional
+/// granted roots (`[capabilities].file_roots`). When no workspace root is set,
+/// falls back to legacy `..`-rejection only.
+fn resolve_file_path_multi(
+    raw_path: &str,
+    workspace_root: Option<&Path>,
+    extra_roots: &[PathBuf],
+) -> Result<PathBuf, String> {
     if let Some(root) = workspace_root {
-        crate::workspace_sandbox::resolve_sandbox_path(raw_path, root)
+        crate::workspace_sandbox::resolve_sandbox_path_multi(raw_path, root, extra_roots)
     } else {
         let _ = validate_path(raw_path)?;
         Ok(PathBuf::from(raw_path))
@@ -1379,9 +1396,10 @@ fn resolve_file_path(raw_path: &str, workspace_root: Option<&Path>) -> Result<Pa
 async fn tool_file_read(
     input: &serde_json::Value,
     workspace_root: Option<&Path>,
+    extra_roots: &[PathBuf],
 ) -> Result<String, String> {
     let raw_path = input["path"].as_str().ok_or("Missing 'path' parameter")?;
-    let resolved = resolve_file_path(raw_path, workspace_root)?;
+    let resolved = resolve_file_path_multi(raw_path, workspace_root, extra_roots)?;
     tokio::fs::read_to_string(&resolved)
         .await
         .map_err(|e| format!("Failed to read file: {e}"))
@@ -1390,9 +1408,10 @@ async fn tool_file_read(
 async fn tool_file_write(
     input: &serde_json::Value,
     workspace_root: Option<&Path>,
+    extra_roots: &[PathBuf],
 ) -> Result<String, String> {
     let raw_path = input["path"].as_str().ok_or("Missing 'path' parameter")?;
-    let resolved = resolve_file_path(raw_path, workspace_root)?;
+    let resolved = resolve_file_path_multi(raw_path, workspace_root, extra_roots)?;
     let content = input["content"]
         .as_str()
         .ok_or("Missing 'content' parameter")?;
@@ -1418,6 +1437,7 @@ async fn tool_file_write(
 fn resolve_directory_path_for_create(
     raw_path: &str,
     workspace_root: Option<&Path>,
+    extra_roots: &[PathBuf],
 ) -> Result<PathBuf, String> {
     // Reject `..` components regardless of workspace.
     let _ = validate_path(raw_path)?;
@@ -1432,10 +1452,6 @@ fn resolve_directory_path_for_create(
     } else {
         root.join(path)
     };
-
-    let canon_root = root
-        .canonicalize()
-        .map_err(|e| format!("Failed to resolve workspace root: {e}"))?;
 
     // Walk up to find the nearest existing ancestor, canonicalize it, then
     // re-append the missing tail.
@@ -1463,9 +1479,16 @@ fn resolve_directory_path_for_create(
         resolved.push(segment);
     }
 
-    if !resolved.starts_with(&canon_root) {
+    // Allowed if the target lives under the workspace OR any granted extra root.
+    let allowed = std::iter::once(root)
+        .chain(extra_roots.iter().map(|p| p.as_path()))
+        .filter_map(|r| r.canonicalize().ok())
+        .any(|canon_root| resolved.starts_with(&canon_root));
+
+    if !allowed {
         return Err(format!(
-            "Access denied: path '{raw_path}' resolves outside workspace"
+            "Access denied: path '{raw_path}' resolves outside the agent \
+             workspace and any granted file_roots"
         ));
     }
 
@@ -1475,12 +1498,13 @@ fn resolve_directory_path_for_create(
 async fn tool_create_directory(
     input: &serde_json::Value,
     workspace_root: Option<&Path>,
+    extra_roots: &[PathBuf],
 ) -> Result<String, String> {
     let raw_path = input["path"].as_str().ok_or("Missing 'path' parameter")?;
     if raw_path.is_empty() {
         return Err("'path' parameter is empty".to_string());
     }
-    let resolved = resolve_directory_path_for_create(raw_path, workspace_root)?;
+    let resolved = resolve_directory_path_for_create(raw_path, workspace_root, extra_roots)?;
     tokio::fs::create_dir_all(&resolved)
         .await
         .map_err(|e| format!("Failed to create directory: {e}"))?;
@@ -1490,9 +1514,10 @@ async fn tool_create_directory(
 async fn tool_file_list(
     input: &serde_json::Value,
     workspace_root: Option<&Path>,
+    extra_roots: &[PathBuf],
 ) -> Result<String, String> {
     let raw_path = input["path"].as_str().ok_or("Missing 'path' parameter")?;
-    let resolved = resolve_file_path(raw_path, workspace_root)?;
+    let resolved = resolve_file_path_multi(raw_path, workspace_root, extra_roots)?;
     let mut entries = tokio::fs::read_dir(&resolved)
         .await
         .map_err(|e| format!("Failed to list directory: {e}"))?;
@@ -1521,11 +1546,12 @@ async fn tool_file_list(
 async fn tool_apply_patch(
     input: &serde_json::Value,
     workspace_root: Option<&Path>,
+    extra_roots: &[PathBuf],
 ) -> Result<String, String> {
     let patch_str = input["patch"].as_str().ok_or("Missing 'patch' parameter")?;
     let root = workspace_root.ok_or("apply_patch requires a workspace root")?;
     let ops = crate::apply_patch::parse_patch(patch_str)?;
-    let result = crate::apply_patch::apply_patch(&ops, root).await;
+    let result = crate::apply_patch::apply_patch(&ops, root, extra_roots).await;
     if result.is_ok() {
         Ok(result.summary())
     } else {
@@ -3925,6 +3951,7 @@ mod tests {
             None, // tts_engine
             None, // docker_config
             None, // process_manager
+            None, // extra_file_roots
         )
         .await;
         assert!(
@@ -3954,6 +3981,7 @@ mod tests {
             None, // tts_engine
             None, // docker_config
             None, // process_manager
+            None, // extra_file_roots
         )
         .await;
         assert!(result.is_error);
@@ -3980,6 +4008,7 @@ mod tests {
             None, // tts_engine
             None, // docker_config
             None, // process_manager
+            None, // extra_file_roots
         )
         .await;
         assert!(result.is_error);
@@ -4006,6 +4035,7 @@ mod tests {
             None, // tts_engine
             None, // docker_config
             None, // process_manager
+            None, // extra_file_roots
         )
         .await;
         assert!(result.is_error);
@@ -4016,7 +4046,8 @@ mod tests {
     async fn test_create_directory_creates_nested() {
         let tmp = tempfile::TempDir::new().unwrap();
         let root = tmp.path();
-        let result = tool_create_directory(&serde_json::json!({"path": "a/b/c"}), Some(root)).await;
+        let result =
+            tool_create_directory(&serde_json::json!({"path": "a/b/c"}), Some(root), &[]).await;
         assert!(result.is_ok(), "Expected Ok, got: {:?}", result);
         let expected = root.join("a").join("b").join("c");
         assert!(
@@ -4031,16 +4062,18 @@ mod tests {
         let tmp = tempfile::TempDir::new().unwrap();
         let root = tmp.path();
         // First create
-        let r1 = tool_create_directory(&serde_json::json!({"path": "data/logs"}), Some(root)).await;
+        let r1 =
+            tool_create_directory(&serde_json::json!({"path": "data/logs"}), Some(root), &[]).await;
         assert!(r1.is_ok());
         // Second create on existing dir should also succeed
-        let r2 = tool_create_directory(&serde_json::json!({"path": "data/logs"}), Some(root)).await;
+        let r2 =
+            tool_create_directory(&serde_json::json!({"path": "data/logs"}), Some(root), &[]).await;
         assert!(r2.is_ok(), "Expected idempotent success, got: {:?}", r2);
     }
 
     #[tokio::test]
     async fn test_create_directory_missing_path_param() {
-        let result = tool_create_directory(&serde_json::json!({}), None).await;
+        let result = tool_create_directory(&serde_json::json!({}), None, &[]).await;
         assert!(result.is_err());
         let msg = result.unwrap_err();
         assert!(msg.contains("Missing 'path'"), "got: {msg}");
@@ -4068,6 +4101,7 @@ mod tests {
             None,                 // tts_engine
             None,                 // docker_config
             None,                 // process_manager
+            None,                 // extra_file_roots
         )
         .await;
         assert!(
@@ -4098,6 +4132,7 @@ mod tests {
             None, // tts_engine
             None, // docker_config
             None, // process_manager
+            None, // extra_file_roots
         )
         .await;
         assert!(result.is_error);
@@ -4124,6 +4159,7 @@ mod tests {
             None, // tts_engine
             None, // docker_config
             None, // process_manager
+            None, // extra_file_roots
         )
         .await;
         // web_search now attempts a real fetch; may succeed or fail depending on network
@@ -4150,6 +4186,7 @@ mod tests {
             None, // tts_engine
             None, // docker_config
             None, // process_manager
+            None, // extra_file_roots
         )
         .await;
         assert!(result.is_error);
@@ -4176,6 +4213,7 @@ mod tests {
             None, // tts_engine
             None, // docker_config
             None, // process_manager
+            None, // extra_file_roots
         )
         .await;
         assert!(result.is_error);
@@ -4203,6 +4241,7 @@ mod tests {
             None, // tts_engine
             None, // docker_config
             None, // process_manager
+            None, // extra_file_roots
         )
         .await;
         assert!(result.is_error);
@@ -4234,6 +4273,7 @@ mod tests {
             None, // tts_engine
             None, // docker_config
             None, // process_manager
+            None, // extra_file_roots
         )
         .await;
         // Should fail for file-not-found, NOT for permission denied
@@ -4279,6 +4319,7 @@ mod tests {
             None, // tts_engine
             None, // docker_config
             None, // process_manager
+            None, // extra_file_roots
         )
         .await;
         // Should NOT be the capability-enforcement "Permission denied" — it should
@@ -4314,6 +4355,7 @@ mod tests {
             None, // tts_engine
             None, // docker_config
             None, // process_manager
+            None, // extra_file_roots
         )
         .await;
         assert!(result.is_error);
@@ -4483,6 +4525,7 @@ mod tests {
             None, // tts_engine
             None, // docker_config
             None, // process_manager
+            None, // extra_file_roots
         )
         .await;
         assert!(result.is_error);
@@ -4528,6 +4571,7 @@ mod tests {
             None, // tts_engine
             None, // docker_config
             None, // process_manager
+            None, // extra_file_roots
         )
         .await;
         assert!(result.is_error);

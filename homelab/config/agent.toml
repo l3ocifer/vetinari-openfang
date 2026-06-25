@@ -103,7 +103,7 @@ max_concurrent_tools = 6
 tools = [
   # File / graph access
   "file_read", "file_list",
-  "file_write",        # Filtered by memory.logseq.graphs writable_paths
+  "file_write",        # Graph access granted via [capabilities].file_roots below
   "memory_store", "memory_recall",
 
   # Cross-agent delegation
@@ -115,6 +115,18 @@ tools = [
   # Sandboxed shell — strictly scoped via shell allowlist below
   "shell_exec",
 ]
+
+# Filesystem roots the file tools (file_read/write/list, create_directory,
+# apply_patch) may access beyond the agent workspace. Granting the whole
+# /data/graphs tree lets scheduled synthesis turns read the rolling
+# dashboard + sibling graphs and PERSIST their deliverable pages (e.g.
+# /data/graphs/leo/pages/world/state-of-the-union.md). Per-graph WRITE
+# permission is enforced one layer down by the deployment's readOnly volume
+# mounts (siblings are mounted read-only; vetinari + leo are RW) — so the
+# sandbox grants the tree and the k8s mount tier enforces RBAC. Without this
+# the file tools were confined to the workspace and every synthesis schedule
+# silently produced no file (pages/world was never created).
+file_roots = ["/data/graphs"]
 
 # Per-graph access tier propagates from openfang.toml [memory.logseq].
 # Listed here for the kernel's RBAC to enforce at write time.

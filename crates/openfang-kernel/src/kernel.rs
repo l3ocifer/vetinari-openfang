@@ -7591,6 +7591,21 @@ impl KernelHandle for OpenFangKernel {
                     info!(agent_id, tool_name, "Auto-approved for hand agent");
                     return Ok(true);
                 }
+                // Autonomous agents running unattended (scheduled/cron turns) have
+                // no human present to approve. When the operator has opted in via
+                // [approval].auto_approve_autonomous, honor the agent's declared
+                // capabilities instead of timing out and denying every turn. Gated
+                // on BOTH the policy flag AND the agent actually being configured
+                // autonomous ([autonomous] present in its manifest).
+                if entry.manifest.autonomous.is_some()
+                    && self.approval_manager.policy().auto_approve_autonomous
+                {
+                    info!(
+                        agent_id,
+                        tool_name, "Auto-approved: autonomous agent + auto_approve_autonomous policy"
+                    );
+                    return Ok(true);
+                }
             }
         }
 

@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.10] - 2026-06-25
+
+### Fixed
+
+- Autonomous (scheduled/cron) turns can now persist output and run gated tools. Two harness gaps that made unattended synthesis schedules silently write nothing are closed:
+  - **File tools were confined to the agent workspace.** New `[capabilities].file_roots` manifest field grants the file tools (`file_read`, `file_write`, `file_list`, `create_directory`, `apply_patch`) access to additional absolute roots beyond the workspace (e.g. a Logseq graph PVC mounted at `/data/graphs`). Paths are still least-privilege: only paths that canonicalize inside the workspace or a declared root are allowed; per-root write is enforced one layer down by the deployment's read-only volume mounts. Empty = workspace-only (prior behavior).
+  - **Gated tools timed out under cron with no human to approve.** New `[approval].auto_approve_autonomous` policy flag auto-approves tool execution for agents that declare an `[autonomous]` section, instead of blocking on a human-approval prompt that can never be answered unattended. The per-tool capability filter, shell allowlist, exec-policy, file_roots sandbox, and subprocess metacharacter guard still apply. Defaults to `false` (prior behavior).
+
 ## [0.5.10] - 2026-04-17
 
 ### Fixed

@@ -361,6 +361,7 @@ impl ToolProfile {
                 vec!["self.*".into()]
             },
             memory_write: vec!["self.*".into()],
+            file_roots: vec![],
             ofp_discover: false,
             ofp_connect: vec![],
         }
@@ -597,6 +598,15 @@ pub struct ManifestCapabilities {
     /// Allowed shell commands.
     #[serde(default, deserialize_with = "crate::serde_compat::vec_lenient")]
     pub shell: Vec<String>,
+    /// Additional absolute filesystem roots the file tools (`file_read`,
+    /// `file_write`, `file_list`, `create_directory`, `apply_patch`) may access
+    /// in addition to the agent workspace. Least-privilege: only paths that
+    /// canonicalize inside one of these roots (or the workspace) are permitted.
+    /// Used to grant an agent read/write to a directory mounted outside its
+    /// workspace — e.g. its Logseq graph PVC at `/data/graphs/<agent>` — so
+    /// scheduled synthesis turns can persist output. Empty = workspace only.
+    #[serde(default, deserialize_with = "crate::serde_compat::vec_lenient")]
+    pub file_roots: Vec<String>,
     /// Whether this agent can discover remote agents via OFP.
     pub ofp_discover: bool,
     /// Allowed OFP peer patterns.

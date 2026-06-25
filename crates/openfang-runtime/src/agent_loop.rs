@@ -322,6 +322,17 @@ pub async fn run_agent_loop(
         .and_then(|v| serde_json::from_value(v.clone()).ok())
         .unwrap_or_default();
 
+    // Additional filesystem roots the file tools may access beyond the workspace,
+    // declared in the manifest's [capabilities].file_roots — e.g. the agent's
+    // Logseq graph PVC mounted at /data/graphs/<agent>, so scheduled synthesis
+    // turns can persist output. Empty for agents that only use their workspace.
+    let extra_file_roots: Vec<std::path::PathBuf> = manifest
+        .capabilities
+        .file_roots
+        .iter()
+        .map(std::path::PathBuf::from)
+        .collect();
+
     // Recall relevant memories — prefer vector similarity search when embedding driver is available
     let memories = if let Some(emb) = embedding_driver {
         match emb.embed_one(user_message).await {
@@ -948,6 +959,7 @@ pub async fn run_agent_loop(
                         tts_engine,
                         docker_config,
                         process_manager,
+                        Some(&extra_file_roots),
                     );
                     let result = match timeout_opt {
                         Some(timeout) => {
@@ -1549,6 +1561,17 @@ pub async fn run_agent_loop_streaming(
         .get("hand_allowed_env")
         .and_then(|v| serde_json::from_value(v.clone()).ok())
         .unwrap_or_default();
+
+    // Additional filesystem roots the file tools may access beyond the workspace,
+    // declared in the manifest's [capabilities].file_roots — e.g. the agent's
+    // Logseq graph PVC mounted at /data/graphs/<agent>, so scheduled synthesis
+    // turns can persist output. Empty for agents that only use their workspace.
+    let extra_file_roots: Vec<std::path::PathBuf> = manifest
+        .capabilities
+        .file_roots
+        .iter()
+        .map(std::path::PathBuf::from)
+        .collect();
 
     // Recall relevant memories — prefer vector similarity search when embedding driver is available
     let memories = if let Some(emb) = embedding_driver {
@@ -2157,6 +2180,7 @@ pub async fn run_agent_loop_streaming(
                         tts_engine,
                         docker_config,
                         process_manager,
+                        Some(&extra_file_roots),
                     );
                     let result = match timeout_opt {
                         Some(timeout) => {

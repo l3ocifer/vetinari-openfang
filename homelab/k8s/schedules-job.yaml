@@ -23,13 +23,19 @@
 # dispatch/reconcile/stall-chase is owned by the DETERMINISTIC
 # `mission-orchestrator` CronJob in the homelab repo
 # (argocd/apps/_agents/mission-orchestrator/), NOT by an LLM schedule:
-# the OpenFang builtin:chat runtime gates shell_exec behind a human
-# approval prompt (no exec_policy) and the subprocess metacharacter guard
-# rejects the inline curl/psql JSON the dispatch needs, while file_write
-# is sandboxed away from /data/graphs. The agent keeps only LLM synthesis
-# (writing its own deliverable pages). `kanban-tick` is therefore disabled
-# here and `open-loops-scan` no longer chases mission stalls (the CronJob
-# does). See homelab/openclaw-configs/shared/skills/a2a-task-routing.
+# the subprocess metacharacter guard rejects the inline curl/psql JSON the
+# dispatch needs (a deliberate command-injection boundary we keep), so
+# shell-driven dispatch stays deterministic by design.
+#
+# The LLM-synthesis half of these schedules NOW PERSISTS: as of openfang
+# 0.6.10 file_write reaches /data/graphs via [capabilities].file_roots in
+# agent.toml (RW to vetinari + leo, sibling graphs read-only by k8s mount),
+# and [approval].auto_approve_autonomous unblocks autonomous tool calls
+# that previously timed out on the human-approval gate. Before this fix the
+# synthesis schedules ran but wrote nothing (pages/world was never created).
+# `kanban-tick` stays disabled and `open-loops-scan` no longer chases
+# mission stalls (the deterministic CronJob does). See
+# homelab/openclaw-configs/shared/skills/a2a-task-routing.
 #
 # All run with model_override="chat" (cheap, 32k window). Per-job
 # timeout_secs are sized to the agentic tool-loop length (150-300s),

@@ -271,20 +271,30 @@ pub fn parse_patch(input: &str) -> Result<Vec<PatchOp>, String> {
     Ok(ops)
 }
 
-/// Resolve a patch path through workspace confinement.
-fn resolve_patch_path(raw: &str, workspace_root: &Path) -> Result<PathBuf, String> {
-    crate::workspace_sandbox::resolve_sandbox_path(raw, workspace_root)
+/// Resolve a patch path through workspace confinement extended with any
+/// explicitly-granted `extra_roots` (`[capabilities].file_roots`).
+fn resolve_patch_path(
+    raw: &str,
+    workspace_root: &Path,
+    extra_roots: &[PathBuf],
+) -> Result<PathBuf, String> {
+    crate::workspace_sandbox::resolve_sandbox_path_multi(raw, workspace_root, extra_roots)
 }
 
 /// Apply parsed patch operations against the filesystem.
 ///
-/// All file paths are confined to `workspace_root` via sandbox resolution.
-pub async fn apply_patch(ops: &[PatchOp], workspace_root: &Path) -> PatchResult {
+/// All file paths are confined to `workspace_root` (plus any granted
+/// `extra_roots`) via sandbox resolution.
+pub async fn apply_patch(
+    ops: &[PatchOp],
+    workspace_root: &Path,
+    extra_roots: &[PathBuf],
+) -> PatchResult {
     let mut result = PatchResult::default();
 
     for op in ops {
         match op {
-            PatchOp::AddFile { path, content } => match resolve_patch_path(path, workspace_root) {
+            PatchOp::AddFile { path, content } => match resolve_patch_path(path, workspace_root, extra_roots) {
                 Ok(resolved) => {
                     if let Some(parent) = resolved.parent() {
                         if let Err(e) = tokio::fs::create_dir_all(parent).await {
@@ -305,7 +315,7 @@ pub async fn apply_patch(ops: &[PatchOp], workspace_root: &Path) -> PatchResult 
                 move_to,
                 hunks,
             } => {
-                let resolved = match resolve_patch_path(path, workspace_root) {
+                let resolved = match resolve_patch_path(path, workspace_root, extra_roots) {
                     Ok(r) => r,
                     Err(e) => {
                         result.errors.push(format!("{}: {}", path, e));
@@ -327,7 +337,7 @@ pub async fn apply_patch(ops: &[PatchOp], workspace_root: &Path) -> PatchResult 
                     Ok(patched) => {
                         // Determine target path (move or in-place)
                         let target = if let Some(new_path) = move_to {
-                            match resolve_patch_path(new_path, workspace_root) {
+                            match resolve_patch_path(new_path, workspace_root, extra_roots) {
                                 Ok(t) => {
                                     result.files_moved += 1;
                                     t
@@ -364,7 +374,7 @@ pub async fn apply_patch(ops: &[PatchOp], workspace_root: &Path) -> PatchResult 
                 }
             }
 
-            PatchOp::DeleteFile { path } => match resolve_patch_path(path, workspace_root) {
+            PatchOp::DeleteFile { path } => match resolve_patch_path(path, workspace_root, extra_roots) {
                 Ok(resolved) => match tokio::fs::remove_file(&resolved).await {
                     Ok(()) => result.files_deleted += 1,
                     Err(e) => {
@@ -736,7 +746,7 @@ mod tests {
             },
         ];
 
-        let result = apply_patch(&ops, &dir).await;
+        let result = apply_patch(&ops, &dir, &[]).await;
         assert!(result.is_ok());
         assert_eq!(result.files_added, 1);
         assert_eq!(result.files_updated, 1);
@@ -770,7 +780,7 @@ mod tests {
             path: "doomed.txt".to_string(),
         }];
 
-        let result = apply_patch(&ops, &dir).await;
+        let result = apply_patch(&ops, &dir, &[]).await;
         assert!(result.is_ok());
         assert_eq!(result.files_deleted, 1);
         assert!(!dir.join("doomed.txt").exists());
