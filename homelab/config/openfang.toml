@@ -187,26 +187,20 @@ allowed_tools = [
   "deep_research",
 ]
 
-# ─── Federated MCP servers (homelab `mcp` namespace) ─────────────────
-# Off-the-shelf servers that replace the stubbed observability/GitOps
-# handlers in homelab-devops. Security is scoped at the server/token/RBAC
-# layer (Grafana SA = Viewer, ArgoCD token = sync-scoped). See
-# homelab/docs/agent-mcp-integration.md.
-
-# Grafana — Prometheus (PromQL) + Loki (LogQL) + dashboards + alerts.
+# ─── Central MCP gateway (homelab `mcp` namespace) ───────────────────
+# ContextForge merges every shared backend (grafana/Prometheus/Loki,
+# forgejo, home-assistant, k8s read-only, postgres read-only) into ONE
+# endpoint. Add/update a server centrally in
+# homelab/argocd/apps/_mcp/70-mcp-gateway.yaml and Vetinari gets it with no
+# config change. Credentials are injected at the gateway edge.
 [[mcp_servers]]
-name = "grafana"
-transport = { type = "http", url = "http://grafana-mcp.mcp.svc.cluster.local:8000/mcp" }
-allowed_tools = [
-  "query_prometheus", "list_prometheus_metric_names",
-  "list_prometheus_label_names", "list_prometheus_label_values",
-  "query_loki_logs", "query_loki_stats",
-  "list_loki_label_names", "list_loki_label_values",
-  "list_datasources", "list_alert_rules",
-  "search_dashboards", "get_dashboard_by_uid",
-]
+name = "gateway"
+transport = { type = "http", url = "http://mcp-gateway.mcp.svc.cluster.local:8080/sse" }
+allowed_tools = ["*"]
 
-# ArgoCD — app status + sync for self-healing GitOps.
+# ArgoCD — app status + sync for self-healing GitOps. Kept DIRECT (the
+# universal gateway carries only read-only/safe servers; sync is an
+# ops/chief-of-staff capability).
 [[mcp_servers]]
 name = "argocd"
 transport = { type = "http", url = "http://argocd-mcp.mcp.svc.cluster.local:3000/mcp" }
@@ -215,16 +209,6 @@ allowed_tools = [
   "get_application_resource_tree", "get_application_manifests",
   "get_application_events", "get_application_logs",
   "sync_application",
-]
-
-# Forgejo — issues + PRs (close the issue-intake loop).
-[[mcp_servers]]
-name = "forgejo"
-transport = { type = "http", url = "http://forgejo-mcp.mcp.svc.cluster.local:3000/mcp" }
-allowed_tools = [
-  "list_my_repos", "get_repository",
-  "list_issues", "get_issue", "create_issue", "create_issue_comment",
-  "list_pull_requests", "get_pull_request",
 ]
 
 # ─── Quiet hours ─────────────────────────────────────────────────────
