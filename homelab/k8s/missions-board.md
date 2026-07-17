@@ -15,6 +15,13 @@ seeded:: 2026-06-01
   deliverable:: /data/graphs/puck/pages/world/t2v-pipeline.md
   acceptance:: a documented, reproducible text→video workflow (ComfyUI or equiv) scaled >0, plus one rendered sample committed and referenced from the deliverable page
   notes:: ComfyUI parked at 0 replicas as of 2026-06-01; un-parking is gated on internal inference being solid — coordinate with Quirm/Vetinari before scaling GPU.
+- TODO Puck — author-style compendium model (Unsloth fine-tune) for AuthorWorks
+  assigned:: puck
+  task-id:: mission-puck-author-model
+  priority:: P1
+  deliverable:: /data/graphs/puck/pages/world/author-model.md
+  acceptance:: fine-tuned style-conditioned model (Pratchett, Gaiman, Adams, Ringo, Rothfuss, Frankowski, Zelazny, Vinge, Butcher, Banks, Stephenson compendium — roster is modular, see corpus registry) trained via Unsloth QLoRA, evals passed (fine-tune preferred ≥70% on style-conditioned pairs), served behind LiteLLM alias `author`, verified against AuthorWorks generation
+  notes:: full charter in Forgejo issue puck-openclaw#27; infra support (GPU burst lane + `author` alias) is homelab#57 routed to Frick. Corpus lives on blade at /srv/archive/corpus (authors.toml registry + corpus.py scan/collect; source in homelab scripts/corpus/) — Pratchett found+staged, 10 authors pending acquisition. Vimes rights-review checkpoint blocks training. Vimes lock, if applied, is final until cleared.
 - TODO Quirm — hardware inference optimization + synthesis
   assigned:: quirm
   task-id:: mission-quirm-infer
