@@ -91,7 +91,7 @@ tower = "0.5"
 tower-http = { version = "0.6", features = ["cors", "trace", "compression-gzip", "compression-br"] }
 
 # Home directory resolution
-dirs = "6"
+dirs = "7.0.0"
 
 # YAML parsing
 serde_yaml = "0.9"
