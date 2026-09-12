@@ -133,7 +133,7 @@ spec:
                       # `chat-thebeast` then `frontier-blade` (LiteLLM map)
                       # if Claude is throttled or refused. See homelab
                       # argocd/apps/_inference/55-claude-bridge.yaml.
-                      "model_override": "claude-sonnet-max",
+                      "model_override": "agent-quality",
                       "timeout_secs": 600,
                       "enabled": True,
                       "message": (
@@ -153,7 +153,7 @@ spec:
                       # Claude Sonnet via Max — the morning brief is the
                       # single most important output of the day, paid model
                       # is justified.
-                      "model_override": "claude-sonnet-max",
+                      "model_override": "agent-quality",
                       "timeout_secs": 600,
                       "enabled": True,
                       "message": (
@@ -223,7 +223,7 @@ spec:
                       # themselves on a 32B local model") is exactly what
                       # the paid model exists for. Falls back to local
                       # `frontier` on Claude throttle.
-                      "model_override": "claude-sonnet-max",
+                      "model_override": "agent-quality",
                       "timeout_secs": 900,
                       "enabled": True,
                       "message": (
@@ -249,7 +249,7 @@ spec:
                       # Claude Sonnet via Max — security pattern detection
                       # is materially better on Claude than on the local
                       # 32B Qwen MoE. Falls back to local `frontier`.
-                      "model_override": "claude-sonnet-max",
+                      "model_override": "agent-quality",
                       "timeout_secs": 900,
                       "enabled": True,
                       "message": (
