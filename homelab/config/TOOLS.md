@@ -38,10 +38,19 @@ the same alias names the siblings use:
 | `long` | `long` (falls through to chat) | Weekly system reviews, multi-day timelines |
 | `embed` | `embed` (tei-embed) | Memory embeddings |
 
-**Cloud fallback**: Anthropic Claude Sonnet 4 via `ANTHROPIC_API_KEY`
-when LiteLLM is unhealthy AND the request is gated as P1+. Cost-
-gated; routine work stays local. Configured under
-`[[fallback_models]]` in `agent.toml`.
+**Escalation fallback**: LiteLLM `agent-quality` (GLM-5.3, over the
+same cluster gateway as `default`/`chat`) when LiteLLM is unhealthy
+AND the request is gated as P1+. Cost-gated; routine work stays
+local. Configured under `[[fallback_models]]` in `agent.toml`.
+No direct Anthropic/OpenAI API calls.
+
+<!-- 2026-09-12 paradigm: this agent's LiteLLM key is now scoped to
+`chat`, `agent`, `agent-fast`, `agent-quality`, `aux`, `long`, `code`,
+`embed`, `rerank`, `transcribe`. `frontier`/`auto`/`codex-*`/`gpt-5.5`/
+direct Claude/OpenAI keys are no longer available to agents -- those
+subscriptions now orchestrate only (Hermes/claude-bridge/codex-bridge),
+not agent fallbacks. See docs/inference-architecture.md section "Paid
+lanes and subscriptions" in l3ocifer/homelab. -->
 
 ## Channels
 

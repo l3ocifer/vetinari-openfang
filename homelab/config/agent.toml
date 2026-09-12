@@ -78,13 +78,16 @@ OUTPUT STYLE:
 You are reliable, observant, and quiet. The siblings are doing their jobs. You make sure the room works.
 """
 
-# Anthropic Claude as a fallback when LiteLLM is degraded AND the
-# request is gated as P1+. Cost-throttled by OpenFang's per-hour
+# 2026-09-12 paradigm: escalation/fallback for P1+ work is now the
+# LiteLLM `agent-quality` alias (GLM-5.3, the "when it must be smarter"
+# rung) through the same cluster gateway as the default `chat` model —
+# no direct Anthropic API call. Cost-throttled by OpenFang's per-hour
 # token cap below; routine work stays local.
 [[fallback_models]]
-provider = "anthropic"
-model = "claude-sonnet-4-20250514"
-api_key_env = "ANTHROPIC_API_KEY"
+provider = "openai_compatible"
+model = "agent-quality"
+base_url = "http://litellm.inference.svc.cluster.local:4000/v1"
+api_key_env = "LITELLM_API_KEY"
 
 # ─── Resources ───────────────────────────────────────────────────────
 [resources]
@@ -176,7 +179,6 @@ network = [
   "homelab-pg-ro.databases.svc.cluster.local",
   "ntfy.leopaska.xyz",
   "conduit.leopaska.xyz",
-  "api.anthropic.com",  # Cloud fallback only
 ]
 
 # ─── Autonomous loop ─────────────────────────────────────────────────

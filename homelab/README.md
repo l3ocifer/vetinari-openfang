@@ -108,7 +108,7 @@ in `l3ocifer/homelab/argocd/sealed-secrets/vetinari-secrets.yaml.template`):
 |---|---|
 | `OPENFANG_API_KEY` | Bearer for HTTP API auth |
 | `LITELLM_API_KEY` | In-cluster LiteLLM gateway |
-| `ANTHROPIC_API_KEY` | Cloud fallback when LiteLLM is degraded |
+<!-- 2026-09-12 paradigm: ANTHROPIC_API_KEY removed -- escalation fallback is now LiteLLM `agent-quality` (GLM-5.3) over LITELLM_API_KEY, same gateway as chat. frontier/auto/codex-*/gpt-5.5 and direct Claude/OpenAI keys are orchestrator-only, not available to this agent. -->
 | `DATABASE_URL` | `postgres://openfang_vetinari@homelab-pg-rw...` |
 | `VETINARI_RO_PASSWORD` | psql for sibling agent DBs (read-only) |
 | `MATRIX_HOMESERVER` + `MATRIX_ACCESS_TOKEN` | `@vetinari:leopaska.xyz` |

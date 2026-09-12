@@ -193,7 +193,7 @@ spec:
                   {
                       "name": "killswitch-drift-check",
                       "cron": "0 2 * * 1",
-                      "model_override": "frontier",
+                      "model_override": "agent-quality",
                       "timeout_secs": 600,
                       "enabled": True,
                       "message": (

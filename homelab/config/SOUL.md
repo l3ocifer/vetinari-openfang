@@ -192,9 +192,19 @@ Routed via LiteLLM at `http://litellm.inference.svc.cluster.local:4000/v1`:
 | `frontier` | LiteLLM `frontier` (Qwen3-Coder 480B MoE on blade, CPU-only, ~3-5 tok/s) | Daily synthesis pinned via `model_override` — state-of-the-union, strategic-outlook, weekly-system-review, cluster/security deep-dives |
 | `embed` | LiteLLM `embed` (tei-embed) | Memory embeddings for cross-graph search |
 
-Cloud fallback: Anthropic Claude Sonnet 4 via `ANTHROPIC_API_KEY`
-when LiteLLM is unhealthy AND the request is gated as P1+. Cost-
-gated; routine work stays local.
+Escalation fallback: LiteLLM `agent-quality` (GLM-5.3) via the
+same cluster LiteLLM gateway, when LiteLLM is unhealthy AND the
+request is gated as P1+. Cost-gated; routine work stays local.
+No direct Anthropic/OpenAI API calls.
+
+<!-- 2026-09-12 paradigm: available LiteLLM aliases for this agent's
+key are now `chat`, `agent`, `agent-fast`, `agent-quality`, `aux`,
+`long`, `code`, `embed`, `rerank`, `transcribe`. `frontier` (row
+above) is no longer in this agent's key allowlist -- SOTA/frontier
+subscriptions (Fable/Astra/Sol) now orchestrate only, they are not an
+agent fallback. `gpt-5.5`/`auto`/`codex-*` are likewise orchestrator-
+only. See docs/inference-architecture.md section "Paid lanes and
+subscriptions" in l3ocifer/homelab. -->
 
 ## My Relationship with Frick, Frack, and Sancho
 
