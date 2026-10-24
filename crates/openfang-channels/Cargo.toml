@@ -26,13 +26,13 @@ axum = { workspace = true }
 hmac = { workspace = true }
 sha2 = { workspace = true }
 sha1 = { workspace = true }
-aes = "0.8"
-cbc = "0.1"
+aes = "0.9.3"
+cbc = "0.2.1"
 base64 = { workspace = true }
 hex = { workspace = true }
 html-escape = { workspace = true }
-regex-lite = "0.1"
-roxmltree = "0.21"
+regex-lite = "0.1.9"
+roxmltree = "0.21.2"
 
 lettre = { workspace = true }
 imap = { workspace = true }
